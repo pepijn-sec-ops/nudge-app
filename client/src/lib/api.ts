@@ -1,7 +1,9 @@
 const TOKEN_KEY = 'nudge_token';
 
-/** Base URL for API (no trailing slash). Empty = same origin (web). Set for Capacitor / split deploy. */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+/** Base URL for API (no trailing slash). */
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+  'https://nudge-app-iim0.onrender.com';
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;

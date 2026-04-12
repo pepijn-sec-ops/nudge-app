@@ -69,8 +69,12 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ✅ ✅ FIXED ROUTE (THIS IS THE IMPORTANT PART)
-app.get('/api/registration-status', (_req, res) => {
-  res.json({ open: true });
+app.get('/api/registration-status', (req, res) => {
+  res.json({
+	mode: 'open',
+	needsInvite: false,
+	message: 'Open registration'
+  });
 });
 
 app.use('/api/auth', authRoutes);
