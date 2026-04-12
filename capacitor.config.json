@@ -1,0 +1,5 @@
+{
+  "appId": "com.nudge.app",
+  "appName": "nudge",
+  "webDir": "client/dist"
+}

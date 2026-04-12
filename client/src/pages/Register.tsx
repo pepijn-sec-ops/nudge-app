@@ -23,7 +23,7 @@ export default function Register() {
   useEffect(() => {
     void (async () => {
       try {
-        const s = await api<RegStatus>('/api/auth/registration-status');
+        const s = await api<RegStatus>(`${import.meta.env.VITE_API_BASE_URL}/registration-status`);
         setStatus(s);
       } catch {
         setStatus({ mode: 'open', needsInvite: false, message: 'Could not load rules; trying open registration.' });

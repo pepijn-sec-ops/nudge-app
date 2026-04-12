@@ -59,7 +59,7 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
-// ✅ EXISTING HEALTH ROUTE
+// ✅ HEALTH ROUTE
 app.get('/api/health', (_req, res) => {
   res.json({
 	ok: true,
@@ -68,8 +68,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// ✅ 🔥 ADD THIS (FIXES YOUR ERROR)
-app.get('/registration-status', (_req, res) => {
+// ✅ ✅ FIXED ROUTE (THIS IS THE IMPORTANT PART)
+app.get('/api/registration-status', (_req, res) => {
   res.json({ open: true });
 });
 
