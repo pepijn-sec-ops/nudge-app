@@ -71,9 +71,9 @@ app.get('/api/health', (_req, res) => {
 // ✅ ✅ FIXED ROUTE (THIS IS THE IMPORTANT PART)
 app.get('/api/registration-status', (req, res) => {
   res.json({
-	mode: 'open',
-	needsInvite: false,
-	message: 'Open registration'
+	mode: 'invite',
+	needsInvite: true,
+	message: 'Invite required'
   });
 });
 
