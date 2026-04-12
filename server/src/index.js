@@ -1,7 +1,7 @@
+import cors from 'cors';
 import 'dotenv/config';
 import 'express-async-errors';
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
@@ -22,6 +22,13 @@ function parseOrigins() {
 }
 
 const app = express();
+
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 const PORT = Number(process.env.PORT) || 4000;
 const allowedOrigins = parseOrigins();
 
