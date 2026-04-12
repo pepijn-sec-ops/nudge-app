@@ -92,9 +92,15 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: message });
 });
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Nudge API listening on http://localhost:${PORT}`);
-  console.log(`Database: ${isUsingPostgres() ? 'PostgreSQL (DATABASE_URL)' : 'JSON file (server/data/db.json)'}`);
+  console.log(
+	`Database: ${
+	  isUsingPostgres()
+		? 'PostgreSQL (DATABASE_URL)'
+		: 'JSON file (server/data/db.json)'
+	}`
+  );
 });
 
 async function shutdown() {
