@@ -28,42 +28,49 @@ const allowedOrigins = parseOrigins();
 if (process.env.NODE_ENV === 'production') {
   const secret = process.env.JWT_SECRET || '';
   if (secret.length < 32) {
-    console.error('FATAL: Set JWT_SECRET to at least 32 random characters in production.');
-    process.exit(1);
+	console.error('FATAL: Set JWT_SECRET to at least 32 random characters in production.');
+	process.exit(1);
   }
   app.use(
-    helmet({
-      contentSecurityPolicy: false,
-      crossOriginEmbedderPolicy: false,
-    }),
+	helmet({
+	  contentSecurityPolicy: false,
+	  crossOriginEmbedderPolicy: false,
+	}),
   );
 }
 
 app.use(
   cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      if (String(origin).toLowerCase().startsWith('capacitor://')) return callback(null, true);
-      if (
-        process.env.NODE_ENV !== 'production' &&
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(origin))
-      ) {
-        return callback(null, true);
-      }
-      return callback(null, false);
-    },
-    credentials: true,
+	origin(origin, callback) {
+	  if (!origin) return callback(null, true);
+	  if (allowedOrigins.includes(origin)) return callback(null, true);
+	  if (String(origin).toLowerCase().startsWith('capacitor://')) return callback(null, true);
+	  if (
+		process.env.NODE_ENV !== 'production' &&
+		/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(origin))
+	  ) {
+		return callback(null, true);
+	  }
+	  return callback(null, false);
+	},
+	credentials: true,
   }),
 );
+
 app.use(express.json({ limit: '1mb' }));
 
+// ✅ EXISTING HEALTH ROUTE
 app.get('/api/health', (_req, res) => {
   res.json({
-    ok: true,
-    name: 'Nudge API',
-    database: isUsingPostgres() ? 'postgres' : 'json-file',
+	ok: true,
+	name: 'Nudge API',
+	database: isUsingPostgres() ? 'postgres' : 'json-file',
   });
+});
+
+// ✅ 🔥 ADD THIS (FIXES YOUR ERROR)
+app.get('/registration-status', (_req, res) => {
+  res.json({ open: true });
 });
 
 app.use('/api/auth', authRoutes);
@@ -77,10 +84,11 @@ app.use('/api/presence', presenceRoutes);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const clientDist = join(__dirname, '..', '..', 'client', 'dist');
+
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get(/^(?!\/api).*/, (_req, res) => {
-    res.sendFile(join(clientDist, 'index.html'));
+	res.sendFile(join(clientDist, 'index.html'));
   });
 }
 
@@ -88,7 +96,9 @@ app.use((err, _req, res, _next) => {
   console.error(err);
   const status = err.status && Number.isInteger(err.status) ? err.status : 500;
   const message =
-    process.env.NODE_ENV === 'production' && status === 500 ? 'Server error' : err.message || 'Server error';
+	process.env.NODE_ENV === 'production' && status === 500
+	  ? 'Server error'
+	  : err.message || 'Server error';
   res.status(status).json({ error: message });
 });
 
@@ -105,9 +115,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
 async function shutdown() {
   try {
-    await closeDb();
+	await closeDb();
   } catch (e) {
-    console.error(e);
+	console.error(e);
   }
   server.close(() => process.exit(0));
 }
