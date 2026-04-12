@@ -199,5 +199,35 @@ router.get('/me', async (req, res) => {
 	res.status(500).json({ error: 'Could not load profile' });
   }
 });
+// 🔥 TEMP: force password reset (REMOVE AFTER USE)
+import bcrypt from 'bcryptjs';
 
+router.post('/force-password', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const db = await readDb();
+
+    const user = db.users.find(
+      (u) => u.email === String(email).toLowerCase().trim()
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.passwordHash = await bcrypt.hash(password, 10);
+
+    await writeDb(() => db);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
 export default router;
