@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Nunito', system-ui, sans-serif;
+  --radius-nudge: 2rem;
+  --color-coral: #e07a5f;
+  --color-gold: #f2cc8f;
+  --color-sage: #81b29a;
+  --color-ink: #3d405b;
+  --color-cream: #fef6ef;
+}
+
+html {
+  font-family: var(--font-display);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--nudge-bg, linear-gradient(160deg, #fff5f0 0%, #fef9e8 45%, #f0faf3 100%));
+  color: var(--nudge-text, #3d405b);
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.font-sm {
+  font-size: 0.9375rem;
+}
+.font-md {
+  font-size: 1rem;
+}
+.font-lg {
+  font-size: 1.125rem;
+}
+
+.nudge-high-contrast {
+  font-weight: 500;
+}
+
+.nudge-high-contrast .shadow-xl,
+.nudge-high-contrast .shadow-lg {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--nudge-text) 22%, transparent),
+    0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.nudge-compact main {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.nudge-compact header {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.nudge-font-system {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}

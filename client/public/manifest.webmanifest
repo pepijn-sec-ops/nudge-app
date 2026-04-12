@@ -1,0 +1,17 @@
+{
+  "name": "Nudge",
+  "short_name": "Nudge",
+  "description": "Warm, playful focus and ADHD-friendly productivity.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fef6ef",
+  "theme_color": "#e07a5f",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
