@@ -19,21 +19,24 @@ import presenceRoutes from './routes/presence.js';
 import { closeDb, isUsingPostgres } from './db.js';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 4000;
 
-// ✅ SIMPLE, RELIABLE CORS (FIXES YOUR MAIN ISSUE)
+// 🔥 CRITICAL FIX (Render dynamic port)
+const PORT = process.env.PORT || 10000;
+
+// ✅ CORS (safe + works everywhere)
 app.use(cors({
-  origin: true, // allow ALL origins safely
+  origin: true,
   credentials: true,
 }));
 
 app.use(express.json({ limit: '1mb' }));
 
-// ✅ SECURITY (only in production)
+// ✅ SECURITY (production only)
 if (process.env.NODE_ENV === 'production') {
   const secret = process.env.JWT_SECRET || '';
+
   if (secret.length < 32) {
-	console.error('FATAL: Set JWT_SECRET to at least 32 random characters in production.');
+	console.error('FATAL: JWT_SECRET must be at least 32 characters.');
 	process.exit(1);
   }
 
@@ -45,7 +48,7 @@ if (process.env.NODE_ENV === 'production') {
   );
 }
 
-// ✅ HEALTH ROUTE
+// ✅ HEALTH CHECK (Render uses this implicitly)
 app.get('/api/health', (_req, res) => {
   res.json({
 	ok: true,
@@ -59,7 +62,7 @@ app.get('/api/registration-status', (_req, res) => {
   res.json({
 	mode: 'invite',
 	needsInvite: true,
-	message: 'Invite required'
+	message: 'Invite required',
   });
 });
 
@@ -73,42 +76,40 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/presence', presenceRoutes);
 
-// ✅ SERVE FRONTEND (if exists)
+// ✅ SERVE FRONTEND (IMPORTANT FIX)
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const clientDist = join(__dirname, '..', '..', 'client', 'dist');
+const clientDist = join(__dirname, '../../client/dist');
 
 if (existsSync(clientDist)) {
+  console.log('Serving frontend from:', clientDist);
+
   app.use(express.static(clientDist));
-  app.get(/^(?!\/api).*/, (_req, res) => {
+
+  app.get('*', (_req, res) => {
 	res.sendFile(join(clientDist, 'index.html'));
   });
+} else {
+  console.warn('⚠️ No frontend build found at:', clientDist);
 }
 
-// ✅ GLOBAL ERROR HANDLER (prevents 502 crashes)
+// ✅ GLOBAL ERROR HANDLER (no crashes → no 502)
 app.use((err, _req, res, _next) => {
   console.error('🔥 ERROR:', err);
 
-  const status = err.status && Number.isInteger(err.status) ? err.status : 500;
-
-  res.status(status).json({
-	error: err.message || 'Server error'
+  res.status(err.status || 500).json({
+	error: err.message || 'Server error',
   });
 });
 
-// ✅ START SERVER
+// ✅ START SERVER (bind to 0.0.0.0 for Render)
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Nudge API running on port ${PORT}`);
-  console.log(
-	`Database: ${
-	  isUsingPostgres()
-		? 'PostgreSQL'
-		: 'JSON file'
-	}`
-  );
+  console.log(`🚀 Nudge API running on port ${PORT}`);
+  console.log(`🗄 Database: ${isUsingPostgres() ? 'PostgreSQL' : 'JSON file'}`);
 });
 
-// ✅ CLEAN SHUTDOWN
+// ✅ CLEAN SHUTDOWN (prevents memory leaks)
 async function shutdown() {
+  console.log('Shutting down...');
   try {
 	await closeDb();
   } catch (e) {
