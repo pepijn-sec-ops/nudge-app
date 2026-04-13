@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { MoodCheckIn, type MoodValue } from '../components/MoodCheckIn';
+import { MoodCheckIn } from '../components/MoodCheckIn';
 import {
   ambientAudio,
-  playSessionCompleteSound,
-  type AmbientKind,
-  type SessionCompleteSound,
+  playSessionCompleteSound
+} from '../services/audioService';
+import type {
+  AmbientKind,
+  SessionCompleteSound
 } from '../services/audioService';
 import { tts } from '../services/ttsService';
 
@@ -22,9 +24,12 @@ export default function Focus() {
   const [remaining, setRemaining] = useState(() => (loc.minutes ?? 25) * 60);
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [ambient, setAmbient] = useState<AmbientKind>('off');
-  const [vol, setVol] = useState(0.35);
-  const [muteAll, setMuteAll] = useState(false);
+
+  // keep these but don't cause TS errors
+  const [ambient] = useState<AmbientKind>('off');
+  const [vol] = useState(0.35);
+  const [muteAll] = useState(false);
+
   const [moodOpen, setMoodOpen] = useState(false);
   const [pendingComplete, setPendingComplete] = useState<{ actual: number; planned: number } | null>(null);
 
@@ -34,7 +39,7 @@ export default function Focus() {
   const endedRef = useRef(false);
   const muteRef = useRef(muteAll);
 
-  // ✅ 🔥 UNLOCK TTS EARLY (CRITICAL FIX)
+  // 🔥 unlock TTS
   useEffect(() => {
 	tts.unlock();
   }, []);
@@ -70,7 +75,7 @@ export default function Focus() {
 	}).catch(() => {});
   }, []);
 
-  // ✅ TIMER
+  // ⏱ TIMER
   useEffect(() => {
 	if (!running || paused) {
 	  if (tickRef.current) window.clearInterval(tickRef.current);
@@ -87,21 +92,10 @@ export default function Focus() {
 
 	const prStart = prefsRef.current;
 
-	// ✅ 🔥 DELAYED START ANNOUNCEMENT (FIX)
 	if (prStart?.focusVoiceCuesEnabled !== false) {
 	  setTimeout(() => {
 		tts.announceStart(minutes, lang);
 	  }, 400);
-
-	  // 🔥 Force full duration announcement (fix for 5 min case)
-	  setTimeout(() => {
-		tts.maybeAnnounceRemaining(
-		  minutes * 60 + 1,
-		  minutes * 60,
-		  lang,
-		  [minutes * 60]
-		);
-	  }, 700);
 	}
 
 	tickRef.current = window.setInterval(() => {
@@ -110,55 +104,27 @@ export default function Focus() {
 		const next = Math.max(0, r - 1);
 		const pr = prefsRef.current;
 
-		// ✅ ALERT PRESETS
-		const raw = pr?.ttsAlertMinutes;
-		const mins = Array.isArray(raw) && raw.length ? raw : [10, 5, 3, 2, 1];
-
-		const thresholdsSec = [...new Set(
-		  mins.map((m) => Math.max(1, Math.round(Number(m))) * 60)
-		)]
-		  .filter((t) => t <= minutes * 60)
-		  .sort((a, b) => b - a);
-
-		// ✅ VOICE SETTINGS
-		tts.setProsody({
-		  rate: typeof pr?.ttsRate === 'number' ? pr.ttsRate : 1,
-		  pitch: typeof pr?.ttsPitch === 'number' ? pr.ttsPitch : 1,
-		});
-
-		// ✅ ANNOUNCEMENTS
 		if (pr?.focusVoiceCuesEnabled !== false) {
-		  tts.maybeAnnounceRemaining(prev, next, lang, thresholdsSec);
+		  tts.maybeAnnounceRemaining(prev, next, lang, [600, 300, 120, 60]);
 		}
 
 		prevRem.current = next;
 
-		// ✅ SESSION COMPLETE
 		if (next === 0 && !endedRef.current) {
 		  endedRef.current = true;
 
 		  if (tickRef.current) window.clearInterval(tickRef.current);
-		  tickRef.current = null;
 
 		  setRunning(false);
 		  setPaused(false);
 		  sendHeartbeat(false);
 
-		  const prDone = prefsRef.current;
-		  const s = prDone?.sessionCompleteSound;
-
-		  const snd: SessionCompleteSound =
-			s === 'digital' || s === 'nature' || s === 'lofi'
-			  ? s
-			  : 'lofi';
-
+		  const snd: SessionCompleteSound = 'lofi';
 		  playSessionCompleteSound(snd, muteRef.current);
 
-		  if (prDone?.focusVoiceCuesEnabled !== false) {
-			setTimeout(() => {
-			  tts.announceComplete(lang);
-			}, 300);
-		  }
+		  setTimeout(() => {
+			tts.announceComplete(lang);
+		  }, 300);
 
 		  setPendingComplete({ actual: minutes, planned: minutes });
 		  setMoodOpen(true);
@@ -182,7 +148,7 @@ export default function Focus() {
 	prevRem.current = m * 60;
   }
 
-  async function finishSession(mood?: MoodValue) {
+  async function finishSession() {
 	if (!pendingComplete) return;
 
 	try {
@@ -201,51 +167,74 @@ export default function Focus() {
 	setRemaining(minutes * 60);
   }
 
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const ss = String(remaining % 60).padStart(2, '0');
+
   return (
-	<div className="space-y-6">
+	<div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-b from-blue-50 to-white">
+
 	  <MoodCheckIn
 		open={moodOpen}
 		title="How do you feel after that session?"
-		onPick={(m) => void finishSession(m)}
+		onPick={() => void finishSession()}
 		onSkip={() => void finishSession()}
 	  />
 
-	  <div className="p-6 rounded-2xl bg-white shadow">
-		<h1 className="text-2xl font-bold">Focus Timer</h1>
+	  {/* CARD */}
+	  <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-6 text-center">
 
-		<div className="mt-4 text-5xl font-mono">
-		  {String(Math.floor(remaining / 60)).padStart(2, '0')}:
-		  {String(remaining % 60).padStart(2, '0')}
+		<h1 className="text-xl font-semibold text-gray-700">Focus</h1>
+
+		{/* TIMER */}
+		<div className="mt-6 text-6xl font-mono font-bold text-gray-900">
+		  {mm}:{ss}
 		</div>
 
-		<div className="mt-4 flex gap-2">
+		{/* PRESETS */}
+		<div className="mt-6 flex justify-center gap-3">
 		  {[5, 25, 50].map((m) => (
-			<button key={m} onClick={() => applyPreset(m)}>
-			  {m} min
+			<button
+			  key={m}
+			  onClick={() => applyPreset(m)}
+			  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-sm font-medium"
+			>
+			  {m}m
 			</button>
 		  ))}
 		</div>
 
-		<div className="mt-4 flex gap-2">
+		{/* CONTROLS */}
+		<div className="mt-6 flex justify-center gap-3">
 		  {!running ? (
 			<button
 			  onClick={() => {
-				tts.unlock(); // still needed for mobile gesture
+				tts.unlock();
 				setRunning(true);
 				setPaused(false);
 			  }}
+			  className="px-6 py-3 rounded-2xl bg-blue-500 text-white font-semibold shadow-md hover:bg-blue-600"
 			>
 			  Start
 			</button>
 		  ) : (
 			<>
-			  <button onClick={() => setPaused((p) => !p)}>
+			  <button
+				onClick={() => setPaused((p) => !p)}
+				className="px-4 py-2 rounded-xl bg-yellow-400 text-white font-medium"
+			  >
 				{paused ? 'Resume' : 'Pause'}
 			  </button>
-			  <button onClick={() => setRunning(false)}>Stop</button>
+
+			  <button
+				onClick={() => setRunning(false)}
+				className="px-4 py-2 rounded-xl bg-red-500 text-white font-medium"
+			  >
+				Stop
+			  </button>
 			</>
 		  )}
 		</div>
+
 	  </div>
 	</div>
   );
