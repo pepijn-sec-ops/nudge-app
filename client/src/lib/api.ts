@@ -25,25 +25,42 @@ export async function api<T>(
   options: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
   const token = options.token ?? getToken();
+
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+	'Content-Type': 'application/json',
+	...(options.headers as Record<string, string>),
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(apiUrl(path), { ...options, headers });
-  if (!res.ok) {
-    let msg = res.statusText;
-    try {
-      const j = await res.json();
-      if (j?.error) msg = j.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg);
+
+  if (token) {
+	headers.Authorization = `Bearer ${token}`;
   }
+
+  const res = await fetch(apiUrl(path), {
+	...options,
+	headers,
+	credentials: 'include', // 🔥 IMPORTANT FIX (CORS + cookies)
+  });
+
+  if (!res.ok) {
+	let msg = res.statusText;
+
+	try {
+	  const j = await res.json();
+	  if (j?.error) msg = j.error;
+	} catch {
+	  // ignore
+	}
+
+	console.error('API ERROR:', msg);
+	throw new Error(msg);
+  }
+
   if (res.status === 204) return undefined as T;
+
   return res.json() as Promise<T>;
 }
+
+/* ================= TYPES ================= */
 
 export type User = {
   id: string;

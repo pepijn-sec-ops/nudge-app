@@ -5,8 +5,8 @@ let announcementsEnabled = true;
 let rate = 1;
 let pitch = 1;
 
-// ✅ MOBILE FIX
 let unlocked = false;
+let voices: SpeechSynthesisVoice[] = [];
 
 function speakMinutesRemaining(minutes: number, lang: string) {
   const base = lang.split('-')[0] || 'en';
@@ -20,88 +20,127 @@ function speakMinutesRemaining(minutes: number, lang: string) {
 
 export const tts = {
   setMuted(m: boolean) {
-    muted = m;
+	muted = m;
   },
 
   getMuted() {
-    return muted;
+	return muted;
   },
 
   setAnnouncementsEnabled(v: boolean) {
-    announcementsEnabled = v;
+	announcementsEnabled = v;
   },
 
   setProsody(opts: { rate?: number; pitch?: number }) {
-    if (typeof opts.rate === 'number' && Number.isFinite(opts.rate)) {
-      rate = Math.min(2, Math.max(0.4, opts.rate));
-    }
-    if (typeof opts.pitch === 'number' && Number.isFinite(opts.pitch)) {
-      pitch = Math.min(2, Math.max(0, opts.pitch));
-    }
+	if (typeof opts.rate === 'number' && Number.isFinite(opts.rate)) {
+	  rate = Math.min(2, Math.max(0.4, opts.rate));
+	}
+	if (typeof opts.pitch === 'number' && Number.isFinite(opts.pitch)) {
+	  pitch = Math.min(2, Math.max(0, opts.pitch));
+	}
   },
 
-  // ✅ MOBILE UNLOCK
+  // ✅ FIXED UNLOCK (WAITS FOR VOICES)
   unlock() {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    if (unlocked) return;
+	if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+	if (unlocked) return;
 
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance('');
-      window.speechSynthesis.speak(u);
-      unlocked = true;
-    } catch {}
+	const synth = window.speechSynthesis;
+
+	const loadVoices = () => {
+	  const v = synth.getVoices();
+	  if (v.length > 0) {
+		voices = v;
+		unlocked = true; // ✅ ONLY set when voices are ready
+		console.log('TTS ready ✅', voices.length);
+	  }
+	};
+
+	// Try immediately
+	loadVoices();
+
+	// Async load (Chrome fix)
+	synth.onvoiceschanged = () => {
+	  loadVoices();
+	};
+
+	// Kickstart engine
+	try {
+	  const u = new SpeechSynthesisUtterance(' ');
+	  synth.speak(u);
+	} catch {}
   },
 
   speak(text: string, lang: string) {
-    if (
-      !announcementsEnabled ||
-      muted ||
-      !unlocked ||
-      typeof window === 'undefined' ||
-      !('speechSynthesis' in window)
-    ) {
-      return;
-    }
+	if (
+	  !announcementsEnabled ||
+	  muted ||
+	  typeof window === 'undefined' ||
+	  !('speechSynthesis' in window)
+	) {
+	  console.log('TTS blocked ❌');
+	  return;
+	}
 
-    window.speechSynthesis.cancel();
-    ambientAudio.duckForSpeech();
+	const synth = window.speechSynthesis;
 
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang || 'en-US';
-    u.rate = rate;
-    u.pitch = pitch;
+	// 🔥 WAIT UNTIL READY (CRITICAL FIX)
+	if (!unlocked || voices.length === 0) {
+	  console.log('TTS not ready yet… retrying');
+	  setTimeout(() => this.speak(text, lang), 300);
+	  return;
+	}
 
-    u.onend = () => ambientAudio.releaseDuck();
-    u.onerror = () => ambientAudio.releaseDuck();
+	console.log('Speaking:', text);
 
-    window.speechSynthesis.speak(u);
+	synth.cancel();
+	ambientAudio.duckForSpeech();
+
+	const u = new SpeechSynthesisUtterance(text);
+	u.lang = lang || 'en-US';
+	u.rate = rate;
+	u.pitch = pitch;
+
+	// ✅ Pick best voice
+	const match =
+	  voices.find((v) => v.lang.startsWith(lang)) ||
+	  voices.find((v) => v.lang.startsWith('en'));
+
+	if (match) u.voice = match;
+
+	u.onend = () => ambientAudio.releaseDuck();
+	u.onerror = () => ambientAudio.releaseDuck();
+
+	synth.speak(u);
   },
 
-  // ✅ WORKS FOR ANY PRESET
   maybeAnnounceRemaining(
-    prevSec: number,
-    curSec: number,
-    lang: string,
-    thresholdsSec: number[]
+	prevSec: number,
+	curSec: number,
+	lang: string,
+	thresholdsSec: number[]
   ) {
-    const sorted = [...new Set(thresholdsSec)]
-      .filter((t) => t > 0)
-      .sort((a, b) => b - a);
+	const sorted = [...new Set(thresholdsSec)]
+	  .filter((t) => t > 0)
+	  .sort((a, b) => b - a);
 
-    for (const secs of sorted) {
-      if (prevSec > secs && curSec <= secs) {
-        const minutes = Math.max(1, Math.round(secs / 60));
-        this.speak(speakMinutesRemaining(minutes, lang), lang);
-      }
-    }
+	for (const secs of sorted) {
+	  if (prevSec > secs && curSec <= secs) {
+		const minutes = Math.max(1, Math.round(secs / 60));
+		this.speak(speakMinutesRemaining(minutes, lang), lang);
+	  }
+	}
   },
 
   announceStart(minutes: number, lang: string) {
-    this.speak(`Focus session started for ${minutes} minutes.`, lang);
+	setTimeout(() => {
+	  this.speak(`Focus session started for ${minutes} minutes.`, lang);
+	}, 400);
   },
 
   announceComplete(lang: string) {
-    this.speak('Session complete. Take a gentle pause.', lang);
+	setTimeout(() => {
+	  this.speak('Session complete. Take a gentle pause.', lang);
+	}, 200);
   },
 };

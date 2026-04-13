@@ -57,7 +57,7 @@ export default function Tasks() {
   }
 
   async function patch(id: string, body: Partial<Task>) {
-    await api(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    await api(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     await load();
   }
 
