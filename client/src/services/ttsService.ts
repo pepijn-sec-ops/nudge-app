@@ -1,4 +1,6 @@
 import { ambientAudio } from './audioService';
+import { Capacitor } from '@capacitor/core';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 let muted = false;
 let announcementsEnabled = true;
@@ -7,6 +9,7 @@ let pitch = 1;
 
 let unlocked = false;
 let voices: SpeechSynthesisVoice[] = [];
+const nativeTtsAvailable = Capacitor.isNativePlatform();
 
 function speakMinutesRemaining(minutes: number, lang: string) {
   const base = lang.split('-')[0] || 'en';
@@ -41,6 +44,10 @@ export const tts = {
   },
 
   unlock() {
+	if (nativeTtsAvailable) {
+	  unlocked = true;
+	  return;
+	}
 	if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 	if (unlocked) {
 	  // Refresh voices list if it arrives later.
@@ -79,12 +86,30 @@ export const tts = {
 	if (
 	  !announcementsEnabled ||
 	  muted ||
-	  typeof window === 'undefined' ||
-	  !('speechSynthesis' in window)
+	  typeof window === 'undefined'
 	) {
 	  console.log('TTS blocked ❌');
 	  return;
 	}
+	if (nativeTtsAvailable) {
+	  if (!unlocked) this.unlock();
+	  ambientAudio.duckForSpeech();
+	  void TextToSpeech.speak({
+		text,
+		lang: lang || 'en-US',
+		rate,
+		pitch,
+		volume: 1,
+	  })
+		.catch(() => {
+		  // Keep app flow stable even when native TTS fails on a device.
+		})
+		.finally(() => {
+		  ambientAudio.releaseDuck();
+		});
+	  return;
+	}
+	if (!('speechSynthesis' in window)) return;
 
 	const synth = window.speechSynthesis;
 
