@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { api, apiWithOfflineQueue, type User, type WorkSessionState } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MoodCheckIn, type MoodValue } from '../components/MoodCheckIn';
+import { tts } from '../services/ttsService';
 
 function displayFromServer(s: WorkSessionState) {
   if (s.isPaused) return s.accumulatedActiveMs;
@@ -22,6 +23,7 @@ export default function Work() {
   const [sessionRef, setSessionRef] = useState<string | null>(null);
   const [moodOpen, setMoodOpen] = useState(false);
   const finishRef = useRef<(m?: MoodValue, skipped?: boolean) => void>(() => {});
+  const prevElapsedSecRef = useRef(0);
 
   const setCurrentWorkSessionLocal = useCallback(
     (currentWorkSession: WorkSessionState | null) => {
@@ -55,6 +57,7 @@ export default function Work() {
     setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
     setDisplayMs(displayFromServer(s));
     setSessionRef(s.sessionRef || null);
+    prevElapsedSecRef.current = Math.floor(displayFromServer(s) / 1000);
   }, [user?.currentWorkSession]);
 
   useEffect(() => {
@@ -71,6 +74,7 @@ export default function Work() {
         setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
         setDisplayMs(displayFromServer(s));
         setSessionRef(s.sessionRef || null);
+        prevElapsedSecRef.current = Math.floor(displayFromServer(s) / 1000);
         setCurrentWorkSessionLocal(s);
       })
       .catch(() => {
@@ -86,11 +90,24 @@ export default function Work() {
       setDisplayMs(accMs);
       return;
     }
-    const tick = () => setDisplayMs(accMs + (Date.now() - segmentStart));
-    tick();
-    const id = window.setInterval(tick, 1000);
+    const tickAndCue = () => {
+      const nextMs = accMs + (Date.now() - segmentStart);
+      setDisplayMs(nextMs);
+      const pref = user?.preferences;
+      if (pref?.ttsEnabled === false || pref?.focusVoiceCuesEnabled === false) return;
+      const alertMinutes = Array.isArray(pref?.ttsAlertMinutes) ? pref.ttsAlertMinutes : [];
+      const marks = (alertMinutes.length
+        ? alertMinutes
+        : [10, 20, 30]
+      ).map((m) => Math.max(1, Math.round(Number(m))));
+      const nextSec = Math.floor(nextMs / 1000);
+      tts.maybeAnnounceElapsed(prevElapsedSecRef.current, nextSec, pref?.language || 'en-US', marks);
+      prevElapsedSecRef.current = nextSec;
+    };
+    tickAndCue();
+    const id = window.setInterval(tickAndCue, 1000);
     return () => window.clearInterval(id);
-  }, [running, paused, segmentStart, accMs]);
+  }, [running, paused, segmentStart, accMs, user?.preferences]);
 
   async function handleStart() {
     const now = Date.now();
@@ -109,7 +126,12 @@ export default function Work() {
     setRunning(true);
     setDisplayMs(0);
     setSessionRef(ref);
+    prevElapsedSecRef.current = 0;
     setCurrentWorkSessionLocal(payload);
+    tts.unlock();
+    if (user?.preferences?.ttsEnabled !== false && user?.preferences?.focusVoiceCuesEnabled !== false) {
+      tts.speak('Work session started.', user?.preferences?.language || 'en-US');
+    }
     await syncServer(payload);
   }
 
@@ -191,8 +213,12 @@ export default function Work() {
       setSegmentStart(null);
       setDisplayMs(0);
       setSessionRef(null);
+      prevElapsedSecRef.current = 0;
       setCurrentWorkSessionLocal(null);
     };
+    if (user?.preferences?.ttsEnabled !== false && user?.preferences?.focusVoiceCuesEnabled !== false) {
+      tts.announceComplete(user?.preferences?.language || 'en-US');
+    }
     setRunning(false);
     setPaused(false);
     setAccMs(total);

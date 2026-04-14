@@ -23,6 +23,13 @@ type PersistedFocusState = {
   taskTitle?: string | null;
 };
 const FOCUS_SESSION_KEY = 'nudge_focus_session_v1';
+const LANGUAGE_OPTIONS = [
+  { value: 'en-US', label: 'English (US)' },
+  { value: 'en-GB', label: 'English (UK)' },
+  { value: 'nl-NL', label: 'Dutch (NL)' },
+  { value: 'de-DE', label: 'German (DE)' },
+  { value: 'es-ES', label: 'Spanish (ES)' },
+];
 
 export default function Focus() {
   const { user, refreshUser } = useAuth();
@@ -55,7 +62,8 @@ export default function Focus() {
   const endedRef = useRef(false);
   const prefsRef = useRef(user?.preferences);
 
-  const lang = user?.preferences?.language || 'en';
+  const rawLang = user?.preferences?.language || 'en-US';
+  const lang = LANGUAGE_OPTIONS.some((opt) => opt.value === rawLang) ? rawLang : 'en-US';
 
   const syncFocusServer = useCallback(
     async (payload: FocusSessionState | { clear: true }) => {
@@ -330,9 +338,13 @@ export default function Focus() {
 
         if (pref?.focusVoiceCuesEnabled !== false) {
           const raw = pref?.ttsAlertMinutes;
-          const mins = Array.isArray(raw) && raw.length ? raw : [10, 5, 1];
-          const thresholds = [...new Set(mins.map((m) => Math.max(1, Math.round(Number(m))) * 60))];
-          tts.maybeAnnounceRemaining(prev, next, lang, thresholds);
+          const marks = (Array.isArray(raw) && raw.length ? raw : [10, 20, 30]).map((m) =>
+            Math.max(1, Math.round(Number(m))),
+          );
+          const prevElapsed = Math.max(0, minutes * 60 - prev);
+          const nextElapsed = Math.max(0, minutes * 60 - next);
+          tts.maybeAnnounceElapsed(prevElapsed, nextElapsed, lang, marks);
+          tts.maybeAnnounceCountdown(prev, next, lang, { countdownFrom: 10, extraMarksSec: [30] });
         }
         prevRem.current = next;
 
@@ -489,6 +501,20 @@ export default function Focus() {
                   Voice cues
                 </button>
               </div>
+              <label className="mb-4 block text-sm font-semibold text-[color:var(--nudge-text)]">
+                Voice language
+                <select
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white/80 px-3 py-2"
+                  value={lang}
+                  onChange={(e) => void patchFocusPreference({ language: e.target.value })}
+                >
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <p className="text-sm mb-5 text-[color:var(--nudge-text)]">
                 <strong>Nudge says:</strong> Try a preset, pick ambient sound, then tap Start. Voice cues use gentle countdown marks; Zen mode keeps time visible and still offers the I'm stuck pause.

@@ -25,6 +25,26 @@ function speakMinutesRemaining(minutes: number, lang: string) {
   return `${minutes} minute${minutes === 1 ? '' : 's'} remaining.`;
 }
 
+function speakMinutesElapsed(minutes: number, lang: string) {
+  const base = lang.split('-')[0] || 'en';
+
+  if (base === 'nl') return `${minutes} minuut${minutes === 1 ? '' : 'en'} voorbij.`;
+  if (base === 'de') return `${minutes} Minute${minutes === 1 ? '' : 'n'} vorbei.`;
+  if (base === 'es') return `${minutes} minuto${minutes === 1 ? '' : 's'} transcurridos.`;
+
+  return `${minutes} minute${minutes === 1 ? '' : 's'} passed.`;
+}
+
+function speakSecondsRemaining(seconds: number, lang: string) {
+  const base = lang.split('-')[0] || 'en';
+
+  if (base === 'nl') return `Nog ${seconds} seconden.`;
+  if (base === 'de') return `Noch ${seconds} Sekunden.`;
+  if (base === 'es') return `Quedan ${seconds} segundos.`;
+
+  return `${seconds} seconds remaining.`;
+}
+
 export const tts = {
   setMuted(m: boolean) {
 	muted = m;
@@ -164,6 +184,49 @@ export const tts = {
 		this.speak(speakMinutesRemaining(minutes, lang), lang);
 	  }
 	}
+  },
+
+  maybeAnnounceElapsed(
+    prevElapsedSec: number,
+    curElapsedSec: number,
+    lang: string,
+    marksMinutes: number[]
+  ) {
+    const sorted = [...new Set(marksMinutes)]
+      .filter((m) => Number.isFinite(m) && m > 0)
+      .sort((a, b) => a - b);
+
+    for (const mins of sorted) {
+      const secs = Math.round(mins) * 60;
+      if (prevElapsedSec < secs && curElapsedSec >= secs) {
+        this.speak(speakMinutesElapsed(Math.max(1, Math.round(mins)), lang), lang);
+      }
+    }
+  },
+
+  maybeAnnounceCountdown(
+    prevSec: number,
+    curSec: number,
+    lang: string,
+    options?: { countdownFrom?: number; extraMarksSec?: number[] }
+  ) {
+    const countdownFrom = Math.max(1, options?.countdownFrom ?? 10);
+    const extraMarks = [...new Set(options?.extraMarksSec ?? [])]
+      .filter((s) => Number.isFinite(s) && s > countdownFrom)
+      .sort((a, b) => b - a);
+
+    for (const secs of extraMarks) {
+      if (prevSec > secs && curSec <= secs) {
+        this.speak(speakSecondsRemaining(Math.round(secs), lang), lang);
+      }
+    }
+
+    for (let sec = countdownFrom; sec >= 1; sec -= 1) {
+      if (prevSec > sec && curSec <= sec) {
+        this.speak(String(sec), lang);
+        break;
+      }
+    }
   },
 
   announceStart(minutes: number, lang: string) {

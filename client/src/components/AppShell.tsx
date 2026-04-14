@@ -11,7 +11,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const anim = user?.preferences?.animationsEnabled !== false;
   const [offlineQueued, setOfflineQueued] = useState(() => getOfflineQueueCount());
 
@@ -81,20 +81,13 @@ export function AppShell() {
               Stats
             </NavLink>
             <NavLink to="/profile" className={linkClass}>
-              Profile
+              Settings
             </NavLink>
             {isUserAdmin(user?.role) && (
               <NavLink to="/admin" className={linkClass}>
                 Admin
               </NavLink>
             )}
-            <button
-              type="button"
-              onClick={() => logout()}
-              className="rounded-2xl px-3 py-2 text-sm font-semibold opacity-80 hover:bg-white/40"
-            >
-              Log out
-            </button>
           </nav>
         </div>
       </header>

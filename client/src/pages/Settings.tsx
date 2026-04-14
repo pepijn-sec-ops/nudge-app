@@ -4,6 +4,7 @@ import { isUserAdmin } from '../lib/roles';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { api, type User } from '../lib/api';
+import { tts } from '../services/ttsService';
 
 const ALERT_MINUTES = [60, 45, 30, 20, 15, 10, 5, 3, 2, 1];
 
@@ -23,6 +24,13 @@ const timezones = [
   'America/Los_Angeles',
   'Asia/Tokyo',
   'Australia/Sydney',
+];
+const voiceLanguages = [
+  { value: 'en-US', label: 'English (US)' },
+  { value: 'en-GB', label: 'English (UK)' },
+  { value: 'nl-NL', label: 'Dutch (NL)' },
+  { value: 'de-DE', label: 'German (DE)' },
+  { value: 'es-ES', label: 'Spanish (ES)' },
 ];
 
 export default function Settings() {
@@ -72,6 +80,11 @@ export default function Settings() {
     if (qTokens.length > 0) return matches;
     return activeTab === tab;
   };
+
+  function runVoiceTest() {
+    tts.unlock();
+    tts.speak('Voice test. If you hear this, audio cues are working.', user?.preferences?.language || 'en-US');
+  }
 
   async function savePrefs(body: Record<string, unknown>) {
     if (!user) return;
@@ -177,7 +190,7 @@ export default function Settings() {
           {([
             ['profile', 'Profile'],
             ['focus', 'Focus'],
-            ['audio', 'Audio'],
+            ['audio', 'Audio cues'],
             ['appearance', 'Appearance'],
             ['security', 'Security'],
             ['advanced', 'Advanced'],
@@ -293,6 +306,13 @@ export default function Settings() {
             Update password
           </button>
           {pwMsg && <span className="text-sm font-semibold text-[color:var(--nudge-text)]">{pwMsg}</span>}
+          <button
+            type="button"
+            className="rounded-[2rem] bg-rose-600 px-5 py-2 text-sm font-extrabold text-white shadow"
+            onClick={() => logout()}
+          >
+            Log out
+          </button>
         </div>
       </section>}
 
@@ -443,7 +463,7 @@ export default function Settings() {
       </section>}
 
       {sectionVisible('audio', ['voice alerts speech rate pitch tts minutes thresholds']) && <section className={card}>
-        <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Voice alerts</h2>
+        <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Audio cues</h2>
         <p className="mt-1 text-sm opacity-70">
           When Focus voice cues are off, these minute marks apply. When they are on, the timer uses 10-minute marks
           plus the 1-minute call instead. At least one chip stays on here.
@@ -499,6 +519,13 @@ export default function Settings() {
             />
           </label>
         </div>
+        <button
+          type="button"
+          onClick={runVoiceTest}
+          className="mt-4 rounded-[2rem] bg-[color:var(--nudge-primary)] px-5 py-2 text-sm font-extrabold text-white shadow"
+        >
+          Voice test
+        </button>
         <p className="mt-3 text-xs opacity-60">
           Rate and pitch use the browser speech engine; results vary slightly by device.
         </p>
@@ -551,8 +578,14 @@ export default function Settings() {
           />
         </label>
         <label className={`${label} mt-4`}>
-          Voice / TTS language (BCP-47, e.g. en-US, nl-NL)
-          <input className={input} value={p.language} onChange={(e) => void savePrefs({ language: e.target.value })} />
+          Voice / TTS language
+          <select className={input} value={p.language || 'en-US'} onChange={(e) => void savePrefs({ language: e.target.value })}>
+            {voiceLanguages.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </label>
       </section>}
 
