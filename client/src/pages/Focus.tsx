@@ -12,6 +12,10 @@ import type { AmbientKind } from '../services/audioService';
 import { tts } from '../services/ttsService';
 
 type Loc = { minutes?: number; taskId?: string; taskTitle?: string };
+type WakeLockSentinelLike = {
+  release?: () => Promise<void>;
+  addEventListener?: (event: 'release', handler: () => void) => void;
+};
 type PersistedFocusState = {
   minutes: number;
   remaining: number;
@@ -61,6 +65,7 @@ export default function Focus() {
   const tickRef = useRef<number | null>(null);
   const endedRef = useRef(false);
   const prefsRef = useRef(user?.preferences);
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
 
   const rawLang = user?.preferences?.language || 'en-US';
   const lang = LANGUAGE_OPTIONS.some((opt) => opt.value === rawLang) ? rawLang : 'en-US';
@@ -254,6 +259,55 @@ export default function Focus() {
   }, [running]);
 
   useEffect(() => {
+    if (!running || paused || user?.preferences?.keepScreenAwake !== true) {
+      if (wakeLockRef.current?.release) {
+        void wakeLockRef.current.release().catch(() => {});
+      }
+      wakeLockRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    const navWithWakeLock = navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> };
+    };
+
+    const ensureWakeLock = async () => {
+      try {
+        if (!navWithWakeLock.wakeLock) return;
+        const sentinel = await navWithWakeLock.wakeLock.request('screen');
+        if (cancelled) {
+          await sentinel.release?.().catch(() => {});
+          return;
+        }
+        wakeLockRef.current = sentinel;
+        sentinel.addEventListener?.('release', () => {
+          if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
+        });
+      } catch {
+        /* wake lock may be unsupported */
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && running && !paused && user?.preferences?.keepScreenAwake === true) {
+        void ensureWakeLock();
+      }
+    };
+
+    void ensureWakeLock();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (wakeLockRef.current?.release) {
+        void wakeLockRef.current.release().catch(() => {});
+      }
+      wakeLockRef.current = null;
+    };
+  }, [running, paused, user?.preferences?.keepScreenAwake]);
+
+  useEffect(() => {
     const payload: PersistedFocusState = {
       minutes,
       remaining,
@@ -431,7 +485,10 @@ export default function Focus() {
   const ss = String(remaining % 60).padStart(2, '0');
 
   const progress = 1 - remaining / (minutes * 60);
+  const progressPct = Math.min(100, Math.max(0, Math.round(progress * 100)));
   const buddy = user?.preferences?.buddyId || 'luna';
+  const showFocusBuddy = user?.preferences?.showFocusBuddy !== false;
+  const showFocusTips = user?.preferences?.showFocusTips !== false;
   const primary = 'var(--nudge-primary)';
   const boltLook =
     buddy === 'bolt'
@@ -516,9 +573,11 @@ export default function Focus() {
                 </select>
               </label>
 
-              <p className="text-sm mb-5 text-[color:var(--nudge-text)]">
-                <strong>Nudge says:</strong> Try a preset, pick ambient sound, then tap Start. Voice cues use gentle countdown marks; Zen mode keeps time visible and still offers the I'm stuck pause.
-              </p>
+              {showFocusTips && (
+                <p className="text-sm mb-4 text-[color:var(--nudge-text)]">
+                  Pick a preset, choose ambient sound, then tap Start.
+                </p>
+              )}
 
               <div className="flex gap-3 mb-6 flex-wrap">
                 {[
@@ -563,6 +622,9 @@ export default function Focus() {
                   style={{ width: `${progress * 100}%`, backgroundColor: primary }}
                 />
               </div>
+              <p className="mb-4 text-center text-sm font-semibold text-[color:var(--nudge-text)]">
+                Progress: {progressPct}%
+              </p>
 
               {!running ? (
                 <button
@@ -630,18 +692,19 @@ export default function Focus() {
               )}
             </div>
 
-            {/* RIGHT SIDE (FOCUS BUDDY) */}
-            <div className="w-full lg:w-64 flex flex-col items-center">
-              <h2 className="font-semibold mb-4 text-[color:var(--nudge-text)]">
-                Focus buddy
-              </h2>
-              <FocusBuddy
-                buddyId={buddy === 'bolt' || buddy === 'pip' || buddy === 'bruno' ? buddy : 'luna'}
-                active={running}
-                paused={paused}
-                boltLook={boltLook}
-              />
-            </div>
+            {showFocusBuddy && (
+              <div className="w-full lg:w-64 flex flex-col items-center">
+                <h2 className="font-semibold mb-4 text-[color:var(--nudge-text)]">
+                  Focus buddy
+                </h2>
+                <FocusBuddy
+                  buddyId={buddy === 'bolt' || buddy === 'pip' || buddy === 'bruno' ? buddy : 'luna'}
+                  active={running}
+                  paused={paused}
+                  boltLook={boltLook}
+                />
+              </div>
+            )}
           </div>
         </div>
 

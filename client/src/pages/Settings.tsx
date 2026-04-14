@@ -453,6 +453,22 @@ export default function Settings() {
             />
             Show gentle tips on Focus page
           </label>
+          <label className="flex items-center gap-3 text-sm font-bold text-[color:var(--nudge-text)]">
+            <input
+              type="checkbox"
+              checked={p.showFocusBuddy !== false}
+              onChange={(e) => void savePrefs({ showFocusBuddy: e.target.checked })}
+            />
+            Show Focus buddy
+          </label>
+          <label className="flex items-center gap-3 text-sm font-bold text-[color:var(--nudge-text)]">
+            <input
+              type="checkbox"
+              checked={p.keepScreenAwake === true}
+              onChange={(e) => void savePrefs({ keepScreenAwake: e.target.checked })}
+            />
+            Keep screen awake during sessions
+          </label>
         </div>
         {p.showFocusTips !== false && (
           <p className="mt-4 rounded-2xl bg-white/70 p-3 text-sm text-[color:var(--nudge-text)]/85">

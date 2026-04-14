@@ -70,6 +70,8 @@ router.put('/', async (req, res) => {
     if (['off', 'rain', 'white', 'brown'].includes(p.ambientDefault)) prefs.ambientDefault = p.ambientDefault;
     if (typeof p.compactMode === 'boolean') prefs.compactMode = p.compactMode;
     if (typeof p.showFocusTips === 'boolean') prefs.showFocusTips = p.showFocusTips;
+    if (typeof p.showFocusBuddy === 'boolean') prefs.showFocusBuddy = p.showFocusBuddy;
+    if (typeof p.keepScreenAwake === 'boolean') prefs.keepScreenAwake = p.keepScreenAwake;
     if (typeof p.weekStartsOn === 'number' && p.weekStartsOn >= 0 && p.weekStartsOn <= 6) {
       prefs.weekStartsOn = Math.floor(p.weekStartsOn);
     }

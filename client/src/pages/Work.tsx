@@ -5,6 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import { MoodCheckIn, type MoodValue } from '../components/MoodCheckIn';
 import { tts } from '../services/ttsService';
 
+type WakeLockSentinelLike = {
+  release?: () => Promise<void>;
+  addEventListener?: (event: 'release', handler: () => void) => void;
+};
+
 function displayFromServer(s: WorkSessionState) {
   if (s.isPaused) return s.accumulatedActiveMs;
   const seg = Date.now() - new Date(s.startedAt).getTime();
@@ -24,6 +29,7 @@ export default function Work() {
   const [moodOpen, setMoodOpen] = useState(false);
   const finishRef = useRef<(m?: MoodValue, skipped?: boolean) => void>(() => {});
   const prevElapsedSecRef = useRef(0);
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
 
   const setCurrentWorkSessionLocal = useCallback(
     (currentWorkSession: WorkSessionState | null) => {
@@ -108,6 +114,55 @@ export default function Work() {
     const id = window.setInterval(tickAndCue, 1000);
     return () => window.clearInterval(id);
   }, [running, paused, segmentStart, accMs, user?.preferences]);
+
+  useEffect(() => {
+    if (!running || paused || user?.preferences?.keepScreenAwake !== true) {
+      if (wakeLockRef.current?.release) {
+        void wakeLockRef.current.release().catch(() => {});
+      }
+      wakeLockRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    const navWithWakeLock = navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> };
+    };
+
+    const ensureWakeLock = async () => {
+      try {
+        if (!navWithWakeLock.wakeLock) return;
+        const sentinel = await navWithWakeLock.wakeLock.request('screen');
+        if (cancelled) {
+          await sentinel.release?.().catch(() => {});
+          return;
+        }
+        wakeLockRef.current = sentinel;
+        sentinel.addEventListener?.('release', () => {
+          if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
+        });
+      } catch {
+        /* wake lock may be unsupported */
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && running && !paused && user?.preferences?.keepScreenAwake === true) {
+        void ensureWakeLock();
+      }
+    };
+
+    void ensureWakeLock();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (wakeLockRef.current?.release) {
+        void wakeLockRef.current.release().catch(() => {});
+      }
+      wakeLockRef.current = null;
+    };
+  }, [running, paused, user?.preferences?.keepScreenAwake]);
 
   async function handleStart() {
     const now = Date.now();

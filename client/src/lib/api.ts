@@ -217,6 +217,8 @@ export type Preferences = {
   ambientDefault?: 'off' | 'rain' | 'white' | 'brown';
   compactMode?: boolean;
   showFocusTips?: boolean;
+  showFocusBuddy?: boolean;
+  keepScreenAwake?: boolean;
   weekStartsOn?: number;
   highContrast?: boolean;
   ttsAlertMinutes?: number[];

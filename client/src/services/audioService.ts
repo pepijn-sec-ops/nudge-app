@@ -43,8 +43,9 @@ function startWhiteBrown(type: 'white' | 'brown') {
   const len = c.sampleRate * 2;
   const buf = makeBuffer(len, (_i) => {
     const w = Math.random() * 2 - 1;
-    if (type === 'white') return w * 0.15;
-    return w * 0.08;
+    // Keep ambient lanes closer in perceived loudness.
+    if (type === 'white') return w * 0.1;
+    return w * 0.1;
   });
   const src = c.createBufferSource();
   src.buffer = buf;
@@ -66,7 +67,7 @@ function startRain() {
   const c = ensureCtx();
   disconnectNoise();
   const len = c.sampleRate * 2;
-  const buf = makeBuffer(len, () => (Math.random() * 2 - 1) * 0.12);
+  const buf = makeBuffer(len, () => (Math.random() * 2 - 1) * 0.1);
   const src = c.createBufferSource();
   src.buffer = buf;
   src.loop = true;
