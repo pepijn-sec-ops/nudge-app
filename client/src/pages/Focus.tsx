@@ -19,6 +19,8 @@ type PersistedFocusState = {
   paused: boolean;
   endAtMs: number | null;
   stuckBreakEndMs: number | null;
+  taskId?: string | null;
+  taskTitle?: string | null;
 };
 const FOCUS_SESSION_KEY = 'nudge_focus_session_v1';
 
@@ -41,6 +43,10 @@ export default function Focus() {
   const [moodOpen, setMoodOpen] = useState(false);
   const [pendingComplete, setPendingComplete] = useState<{ actual: number; planned: number } | null>(null);
   const [focusSessionRef, setFocusSessionRef] = useState<string | null>(null);
+  const [activeTask, setActiveTask] = useState<{ id: string | null; title: string | null }>({
+    id: loc.taskId || null,
+    title: loc.taskTitle || null,
+  });
 
   const prevRem = useRef(remaining);
   const prevStuckBreakSecRef = useRef(stuckBreakSec);
@@ -68,6 +74,15 @@ export default function Focus() {
   useEffect(() => {
     tts.unlock();
   }, []);
+
+  useEffect(() => {
+    if (loc.taskId || loc.taskTitle) {
+      setActiveTask({
+        id: loc.taskId || null,
+        title: loc.taskTitle || null,
+      });
+    }
+  }, [loc.taskId, loc.taskTitle]);
 
   function completeByTimer(planned: number) {
     if (endedRef.current) return;
@@ -99,6 +114,10 @@ export default function Focus() {
           setRunning(true);
           setPaused(!!s.isPaused);
           setFocusSessionRef(typeof s.sessionRef === 'string' && s.sessionRef.trim() ? s.sessionRef : null);
+          setActiveTask({
+            id: typeof s.taskId === 'string' && s.taskId.trim() ? s.taskId : null,
+            title: typeof s.taskTitle === 'string' && s.taskTitle.trim() ? s.taskTitle : null,
+          });
           if (!s.isPaused && s.endsAt) {
             const rem = Math.max(0, Math.ceil((new Date(s.endsAt).getTime() - Date.now()) / 1000));
             setRemaining(rem);
@@ -137,6 +156,10 @@ export default function Focus() {
             const left = Math.max(0, Math.ceil((Number(saved.stuckBreakEndMs) - Date.now()) / 1000));
             setStuckBreakSec(left);
           }
+          setActiveTask({
+            id: typeof saved.taskId === 'string' && saved.taskId.trim() ? saved.taskId : null,
+            title: typeof saved.taskTitle === 'string' && saved.taskTitle.trim() ? saved.taskTitle : null,
+          });
         } catch {
           /* ignore malformed persisted timer state */
         }
@@ -166,6 +189,10 @@ export default function Focus() {
             const left = Math.max(0, Math.ceil((Number(saved.stuckBreakEndMs) - Date.now()) / 1000));
             setStuckBreakSec(left);
           }
+          setActiveTask({
+            id: typeof saved.taskId === 'string' && saved.taskId.trim() ? saved.taskId : null,
+            title: typeof saved.taskTitle === 'string' && saved.taskTitle.trim() ? saved.taskTitle : null,
+          });
         } catch {
           /* ignore malformed persisted timer state */
         }
@@ -226,6 +253,8 @@ export default function Focus() {
       paused,
       endAtMs: running && !paused ? Date.now() + remaining * 1000 : null,
       stuckBreakEndMs: stuckBreakSec > 0 ? Date.now() + stuckBreakSec * 1000 : null,
+      taskId: activeTask.id,
+      taskTitle: activeTask.title,
     };
     try {
       if (!running && remaining === minutes * 60) {
@@ -236,7 +265,7 @@ export default function Focus() {
     } catch {
       /* ignore localStorage failures */
     }
-  }, [minutes, remaining, running, paused, stuckBreakSec]);
+  }, [minutes, remaining, running, paused, stuckBreakSec, activeTask.id, activeTask.title]);
 
   useEffect(() => {
     if (!running) return;
@@ -251,6 +280,8 @@ export default function Focus() {
         stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
         updatedAt: new Date().toISOString(),
         sessionRef,
+        taskId: activeTask.id,
+        taskTitle: activeTask.title,
       });
       return;
     }
@@ -262,8 +293,10 @@ export default function Focus() {
       stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
       updatedAt: new Date().toISOString(),
       sessionRef,
+      taskId: activeTask.id,
+      taskTitle: activeTask.title,
     });
-  }, [running, paused, minutes, focusSessionRef, syncFocusServer]);
+  }, [running, paused, minutes, focusSessionRef, syncFocusServer, activeTask.id, activeTask.title]);
 
   const sendHeartbeat = useCallback((focusing: boolean) => {
     void api('/api/presence/heartbeat', {
@@ -340,8 +373,8 @@ export default function Focus() {
         body: JSON.stringify({
           plannedMinutes: pendingComplete.planned,
           actualMinutes: pendingComplete.actual,
-          taskId: loc.taskId || null,
-          taskName: loc.taskTitle || null,
+          taskId: activeTask.id,
+          taskName: activeTask.title,
           sessionRef: focusSessionRef || null,
         }),
       });
@@ -352,6 +385,7 @@ export default function Focus() {
     setPendingComplete(null);
     setRemaining(minutes * 60);
     setFocusSessionRef(null);
+    setActiveTask({ id: null, title: null });
     void syncFocusServer({ clear: true });
     try {
       localStorage.removeItem(FOCUS_SESSION_KEY);
@@ -371,8 +405,8 @@ export default function Focus() {
           context: 'focus',
           pinned,
           linkedSessionRef: focusSessionRef || null,
-          linkedTaskId: loc.taskId || null,
-          linkedTaskTitle: loc.taskTitle || null,
+          linkedTaskId: activeTask.id,
+          linkedTaskTitle: activeTask.title,
         }),
       });
       setIdeaNote('');
@@ -414,6 +448,11 @@ export default function Focus() {
               <h1 className="text-2xl font-bold mb-4 text-[color:var(--nudge-text)]">
                 Focus timer
               </h1>
+              {activeTask.title && (
+                <p className="mb-4 rounded-2xl bg-[color:var(--nudge-accent)] px-3 py-2 text-sm font-bold text-[color:var(--nudge-text)]">
+                  Working on: {activeTask.title}
+                </p>
+              )}
 
               <div className="flex gap-3 mb-4 lg:justify-end">
                 <button

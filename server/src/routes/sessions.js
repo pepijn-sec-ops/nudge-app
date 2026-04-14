@@ -32,6 +32,11 @@ function normalizeFocusSession(body) {
       typeof body?.sessionRef === 'string' && body.sessionRef.trim()
         ? body.sessionRef.trim().slice(0, 120)
         : null,
+    taskId: typeof body?.taskId === 'string' && body.taskId.trim() ? body.taskId.trim().slice(0, 120) : null,
+    taskTitle:
+      typeof body?.taskTitle === 'string' && body.taskTitle.trim()
+        ? body.taskTitle.trim().slice(0, 200)
+        : null,
   };
 }
 

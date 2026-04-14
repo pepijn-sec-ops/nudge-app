@@ -267,6 +267,8 @@ export type FocusSessionState = {
   stuckBreakEndAt: string | null;
   updatedAt: string;
   sessionRef?: string;
+  taskId?: string | null;
+  taskTitle?: string | null;
 };
 
 export type Note = {

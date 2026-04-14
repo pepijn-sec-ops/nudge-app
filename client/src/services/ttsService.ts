@@ -40,18 +40,22 @@ export const tts = {
 	}
   },
 
-  // ✅ FIXED UNLOCK (WAITS FOR VOICES)
   unlock() {
 	if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-	if (unlocked) return;
+	if (unlocked) {
+	  // Refresh voices list if it arrives later.
+	  const latest = window.speechSynthesis.getVoices();
+	  if (latest.length) voices = latest;
+	  return;
+	}
 
 	const synth = window.speechSynthesis;
+	unlocked = true; // User interaction already happened; allow fallback speaking.
 
 	const loadVoices = () => {
 	  const v = synth.getVoices();
 	  if (v.length > 0) {
 		voices = v;
-		unlocked = true; // ✅ ONLY set when voices are ready
 		console.log('TTS ready ✅', voices.length);
 	  }
 	};
@@ -84,8 +88,9 @@ export const tts = {
 
 	const synth = window.speechSynthesis;
 
-	// 🔥 WAIT UNTIL READY (CRITICAL FIX)
-	if (!unlocked || voices.length === 0) {
+	// Ensure unlock was attempted from a user gesture.
+	if (!unlocked) {
+	  this.unlock();
 	  console.log('TTS not ready yet… retrying');
 	  setTimeout(() => this.speak(text, lang), 300);
 	  return;
@@ -101,7 +106,7 @@ export const tts = {
 	u.rate = rate;
 	u.pitch = pitch;
 
-	// ✅ Pick best voice
+	// Pick best voice when available; otherwise use platform default voice.
 	const match =
 	  voices.find((v) => v.lang.startsWith(lang)) ||
 	  voices.find((v) => v.lang.startsWith('en'));
