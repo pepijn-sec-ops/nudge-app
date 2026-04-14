@@ -48,6 +48,8 @@ export default function Settings() {
   if (!user || !p) return null;
 
   async function savePrefs(body: Record<string, unknown>) {
+    if (!user) return;
+    const currentUser: User = user;
     setSaveErr('');
     try {
       const data = await api<{ preferences: User['preferences'] }>('/api/preferences', {
@@ -55,7 +57,7 @@ export default function Settings() {
         body: JSON.stringify(body),
       });
       setUserLocal({
-        ...user,
+        ...currentUser,
         preferences: data.preferences,
       });
     } catch (e) {
@@ -91,7 +93,8 @@ export default function Settings() {
   const input =
     'mt-1 w-full rounded-2xl border border-black/10 bg-white/80 px-3 py-2 font-semibold outline-none ring-[color:var(--nudge-primary)] focus:ring-2';
 
-  const selectedBuddy = p.buddyId === 'dog' ? 'bruno' : p.buddyId;
+  const rawBuddyId = String(p.buddyId ?? 'luna');
+  const selectedBuddy = rawBuddyId === 'dog' ? 'bruno' : rawBuddyId;
 
   return (
     <div className="space-y-6">
