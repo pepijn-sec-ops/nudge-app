@@ -18,6 +18,7 @@ export default function Work() {
   const [accMs, setAccMs] = useState(0);
   const [segmentStart, setSegmentStart] = useState<number | null>(null);
   const [displayMs, setDisplayMs] = useState(0);
+  const [ideaNote, setIdeaNote] = useState('');
   const [moodOpen, setMoodOpen] = useState(false);
   const finishRef = useRef<(m?: MoodValue, skipped?: boolean) => void>(() => {});
 
@@ -138,6 +139,20 @@ export default function Work() {
     setMoodOpen(true);
   }
 
+  async function saveIdeaNote(pinned = false) {
+    const content = ideaNote.trim();
+    if (!content) return;
+    try {
+      await api('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({ content, context: 'work', pinned }),
+      });
+      setIdeaNote('');
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
     <div className="space-y-6">
       <MoodCheckIn
@@ -199,6 +214,32 @@ export default function Work() {
               </button>
             </>
           )}
+        </div>
+      </div>
+      <div className="rounded-[2rem] border border-white/40 bg-[color:var(--nudge-card)] p-6 shadow-xl backdrop-blur-md">
+        <h2 className="text-lg font-extrabold text-[color:var(--nudge-text)]">Capture idea</h2>
+        <p className="mt-1 text-sm opacity-75">Keep your thought, then continue working.</p>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={ideaNote}
+            onChange={(e) => setIdeaNote(e.target.value)}
+            className="flex-1 rounded-2xl border border-black/10 bg-white/80 px-4 py-3 font-semibold"
+            placeholder="Write your idea..."
+          />
+          <button
+            type="button"
+            onClick={() => void saveIdeaNote(false)}
+            className="rounded-[2rem] bg-[color:var(--nudge-primary)] px-4 py-2 text-sm font-extrabold text-white shadow"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveIdeaNote(true)}
+            className="rounded-[2rem] bg-white/80 px-4 py-2 text-sm font-extrabold shadow"
+          >
+            Pin
+          </button>
         </div>
       </div>
     </div>

@@ -6,8 +6,27 @@ import { THEME_IDS, unlockedThemesForLevel, levelFromXp } from '../gamification.
 const router = Router();
 router.use(requireAuth);
 
+function normalizeBuddyId(raw) {
+  if (typeof raw !== 'string') return null;
+  const key = raw.trim().toLowerCase();
+  const aliasToBuddy = {
+    luna: 'luna',
+    'luna the cat': 'luna',
+    bolt: 'bolt',
+    'bolt the bot': 'bolt',
+    pip: 'pip',
+    'pip the bird': 'pip',
+    bruno: 'bruno',
+    dog: 'bruno',
+    'bruno the golden retriever': 'bruno',
+  };
+  return aliasToBuddy[key] || null;
+}
+
 router.get('/', async (req, res) => {
   const u = (await readDb()).users.find((x) => x.id === req.user.id);
+  const normalizedBuddy = normalizeBuddyId(u?.preferences?.buddyId);
+  if (normalizedBuddy && u?.preferences) u.preferences.buddyId = normalizedBuddy;
   res.json({ preferences: u.preferences });
 });
 
@@ -28,7 +47,8 @@ router.put('/', async (req, res) => {
     if (typeof p.avatarColor === 'string') prefs.avatarColor = p.avatarColor;
     if (typeof p.accentColor === 'string') prefs.accentColor = p.accentColor;
     if (typeof p.avatarId === 'string') prefs.avatarId = p.avatarId;
-    if (['luna', 'bolt', 'pip'].includes(p.buddyId)) prefs.buddyId = p.buddyId;
+    const normalizedBuddy = normalizeBuddyId(p.buddyId);
+    if (normalizedBuddy) prefs.buddyId = normalizedBuddy;
     if (Array.isArray(p.motivationalMessages)) {
       prefs.motivationalMessages = p.motivationalMessages
         .map((s) => String(s).trim())
@@ -91,6 +111,20 @@ router.put('/', async (req, res) => {
     }
     if (['lofi', 'digital', 'nature'].includes(p.sessionCompleteSound)) {
       prefs.sessionCompleteSound = p.sessionCompleteSound;
+    }
+    if (typeof p.profileHeadline === 'string') prefs.profileHeadline = p.profileHeadline.trim().slice(0, 90);
+    if (typeof p.profilePronouns === 'string') prefs.profilePronouns = p.profilePronouns.trim().slice(0, 30);
+    if (['leaf', 'spark', 'rocket', 'target', 'heart', 'star'].includes(p.profileLogoId)) {
+      prefs.profileLogoId = p.profileLogoId;
+    }
+    if (typeof p.profileLogoColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(p.profileLogoColor)) {
+      prefs.profileLogoColor = p.profileLogoColor;
+    }
+    if (typeof p.profileImageDataUrl === 'string') {
+      if (!p.profileImageDataUrl) prefs.profileImageDataUrl = '';
+      else if (p.profileImageDataUrl.startsWith('data:image/') && p.profileImageDataUrl.length <= 1200000) {
+        prefs.profileImageDataUrl = p.profileImageDataUrl;
+      }
     }
     u.preferences = prefs;
   });

@@ -14,8 +14,6 @@ const themes = [
   { id: 'minimal_zen', label: 'Minimal Zen' },
 ];
 
-const avatars = ['smile', 'heart', 'sparkle', 'ghost', 'rocket', 'target', 'star', 'bolt', 'leaf'];
-
 const timezones = [
   'UTC',
   'Europe/Amsterdam',
@@ -27,10 +25,6 @@ const timezones = [
   'Australia/Sydney',
 ];
 
-function levelFromXpClient(xp: number) {
-  return Math.floor(xp / 100) + 1;
-}
-
 export default function Settings() {
   const { pathname } = useLocation();
   const isProfileRoute = pathname.endsWith('/profile');
@@ -41,6 +35,7 @@ export default function Settings() {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [pwMsg, setPwMsg] = useState('');
+  const [saveErr, setSaveErr] = useState('');
 
   useEffect(() => {
     if (p?.motivationalMessages) setMessages(p.motivationalMessages.join('\n'));
@@ -53,8 +48,19 @@ export default function Settings() {
   if (!user || !p) return null;
 
   async function savePrefs(body: Record<string, unknown>) {
-    await api('/api/preferences', { method: 'PUT', body: JSON.stringify(body) });
-    await refreshUser();
+    setSaveErr('');
+    try {
+      const data = await api<{ preferences: User['preferences'] }>('/api/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      setUserLocal({
+        ...user,
+        preferences: data.preferences,
+      });
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : 'Could not save settings');
+    }
   }
 
   async function saveProfile() {
@@ -85,7 +91,7 @@ export default function Settings() {
   const input =
     'mt-1 w-full rounded-2xl border border-black/10 bg-white/80 px-3 py-2 font-semibold outline-none ring-[color:var(--nudge-primary)] focus:ring-2';
 
-  const level = levelFromXpClient(user?.xp ?? 0);
+  const selectedBuddy = p.buddyId === 'dog' ? 'bruno' : p.buddyId;
 
   return (
     <div className="space-y-6">
@@ -98,6 +104,7 @@ export default function Settings() {
             ? 'Personalize Bolt, color mood, sounds, and your account — all in one calm place.'
             : 'Tune Nudge to your senses, schedule, and account.'}
         </p>
+        {saveErr && <p className="mt-2 text-sm font-semibold text-rose-700">{saveErr}</p>}
       </div>
 
       {isUserAdmin(user.role) && (
@@ -213,51 +220,17 @@ export default function Settings() {
           </label>
           <label className={label}>
             Focus buddy
-            <select className={input} value={p.buddyId} onChange={(e) => void savePrefs({ buddyId: e.target.value })}>
+            <select
+              className={input}
+              value={selectedBuddy}
+              onChange={(e) => void savePrefs({ buddyId: e.target.value })}
+            >
               <option value="luna">Luna the Cat</option>
               <option value="bolt">Bolt the Bot</option>
               <option value="pip">Pip the Bird</option>
+              <option value="bruno">Bruno the Golden Retriever</option>
             </select>
           </label>
-          {p.buddyId === 'bolt' && (
-            <div className="sm:col-span-2 rounded-2xl border border-white/40 bg-white/45 p-4">
-              <h3 className="text-lg font-extrabold text-[color:var(--nudge-text)]">Bolt&apos;s closet</h3>
-              <p className="mt-1 text-xs opacity-70">
-                Level {level} — hats unlock at 2, glasses at 4. These options follow you to the Focus timer.
-              </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className={label}>
-                  Bolt body color
-                  <input
-                    type="color"
-                    className="mt-1 h-11 w-full cursor-pointer rounded-2xl border border-black/10 bg-white"
-                    value={p.boltBodyColor ?? '#81b29a'}
-                    onChange={(e) => void savePrefs({ boltBodyColor: e.target.value })}
-                  />
-                </label>
-                <div className="flex flex-col justify-end gap-3 pb-1">
-                  <label className="flex items-center gap-3 text-sm font-bold text-[color:var(--nudge-text)]">
-                    <input
-                      type="checkbox"
-                      disabled={level < 2}
-                      checked={!!p.boltAccessoryHat && level >= 2}
-                      onChange={(e) => void savePrefs({ boltAccessoryHat: e.target.checked })}
-                    />
-                    Party hat {level < 2 && <span className="text-xs font-semibold opacity-60">(Lv 2+)</span>}
-                  </label>
-                  <label className="flex items-center gap-3 text-sm font-bold text-[color:var(--nudge-text)]">
-                    <input
-                      type="checkbox"
-                      disabled={level < 4}
-                      checked={!!p.boltAccessoryGlasses && level >= 4}
-                      onChange={(e) => void savePrefs({ boltAccessoryGlasses: e.target.checked })}
-                    />
-                    Focus glasses {level < 4 && <span className="text-xs font-semibold opacity-60">(Lv 4+)</span>}
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
           <label className={label}>
             Primary button
             <input
@@ -268,15 +241,6 @@ export default function Settings() {
             />
           </label>
           <label className={label}>
-            Avatar color
-            <input
-              type="color"
-              className="mt-1 h-11 w-full cursor-pointer rounded-2xl border border-black/10 bg-white"
-              value={p.avatarColor}
-              onChange={(e) => void savePrefs({ avatarColor: e.target.value })}
-            />
-          </label>
-          <label className={label}>
             Accent
             <input
               type="color"
@@ -284,16 +248,6 @@ export default function Settings() {
               value={p.accentColor}
               onChange={(e) => void savePrefs({ accentColor: e.target.value })}
             />
-          </label>
-          <label className={label}>
-            Avatar icon
-            <select className={input} value={p.avatarId} onChange={(e) => void savePrefs({ avatarId: e.target.value })}>
-              {avatars.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
       </section>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { api, type Task } from '../lib/api';
+import { api, type Note, type Task } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 type Summary = {
@@ -17,14 +17,16 @@ export default function Home() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [nudgeVisible, setNudgeVisible] = useState(true);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [t, s, p] = await Promise.all([
+        const [t, n, s, p] = await Promise.all([
           api<{ tasks: Task[] }>('/api/tasks'),
+          api<{ notes: Note[] }>('/api/notes'),
           api<{
             minutesToday: number;
             dailyGoalMinutes: number;
@@ -34,6 +36,7 @@ export default function Home() {
           api<{ focusingCount: number }>('/api/presence/global'),
         ]);
         setTasks(t.tasks);
+        setNotes((n.notes || []).filter((x) => x.pinned));
         setSummary({ ...s, focusingCount: p.focusingCount });
       } catch {
         /* offline */
@@ -113,7 +116,7 @@ export default function Home() {
           </button>
         </motion.div>
       )}
-      <section className="rounded-[2rem] border border-white/40 bg-gradient-to-br from-white/70 to-white/30 p-6 shadow-lg backdrop-blur-md">
+      <section className="rounded-[2rem] border border-white/35 bg-white/60 p-6 shadow-lg backdrop-blur-md">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide opacity-60">Today</p>
@@ -201,6 +204,31 @@ export default function Home() {
                 Play
               </button>
             </motion.div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Pinned notes</h2>
+          <Link to="notes" className="text-sm font-semibold underline">
+            Open notes
+          </Link>
+        </div>
+        <div className="grid gap-3">
+          {notes.length === 0 && (
+            <p className="rounded-[2rem] border border-dashed border-black/15 bg-white/40 p-6 text-center text-sm opacity-70">
+              Pin notes from the Notes page to keep ideas visible here.
+            </p>
+          )}
+          {notes.map((n) => (
+            <div
+              key={n.id}
+              className="rounded-[2rem] border border-white/40 bg-[color:var(--nudge-card)] p-4 shadow-md backdrop-blur-sm"
+            >
+              <p className="font-semibold text-[color:var(--nudge-text)]">{n.content}</p>
+              <p className="mt-1 text-xs opacity-65 capitalize">{n.context}</p>
+            </div>
           ))}
         </div>
       </section>

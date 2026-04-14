@@ -15,15 +15,20 @@ html {
   font-family: var(--font-display);
 }
 
+:root {
+  --nudge-bg: var(--color-cream);
+  --nudge-text: var(--color-ink);
+  --nudge-card: rgba(255, 255, 255, 0.78);
+  --nudge-primary: var(--color-primary);
+  --nudge-accent: #f2cc8f;
+}
+
 body {
   margin: 0;
   min-height: 100dvh;
 
-  /* ❌ REMOVE rainbow gradient */
-  /* ✅ USE clean soft background */
-  background: var(--color-cream);
-
-  color: var(--color-ink);
+  background: var(--nudge-bg);
+  color: var(--nudge-text);
 }
 
 #root {
@@ -98,4 +103,25 @@ body {
 	'Segoe UI',
 	Roboto,
 	sans-serif;
+}
+
+/* Keep admin readable across all mood presets */
+.admin-readable {
+  color: var(--nudge-text);
+}
+
+.admin-readable .text-white,
+.admin-readable .text-slate-100 {
+  color: var(--nudge-text) !important;
+}
+
+.admin-readable .text-slate-300,
+.admin-readable .text-emerald-200,
+.admin-readable .text-rose-200 {
+  color: color-mix(in srgb, var(--nudge-text) 80%, transparent) !important;
+}
+
+.admin-readable .bg-white\/60,
+.admin-readable .bg-white\/70 {
+  background: var(--nudge-card) !important;
 }

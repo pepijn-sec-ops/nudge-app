@@ -32,5 +32,10 @@ export function defaultPreferences() {
     boltAccessoryHat: false,
     boltAccessoryGlasses: false,
     sessionCompleteSound: 'lofi',
+    profileHeadline: 'Building calm momentum.',
+    profilePronouns: '',
+    profileLogoId: 'leaf',
+    profileLogoColor: '#166534',
+    profileImageDataUrl: '',
   };
 }

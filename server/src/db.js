@@ -28,6 +28,7 @@ const defaultDb = () => ({
   users: [],
   tasks: [],
   sessions: [],
+  notes: [],
   moods: [],
   globalConfig: {
     globalXpMultiplier: 1,
@@ -74,6 +75,7 @@ function normalizeDb(db) {
   if (!Array.isArray(db.users)) db.users = [];
   if (!Array.isArray(db.tasks)) db.tasks = [];
   if (!Array.isArray(db.sessions)) db.sessions = [];
+  if (!Array.isArray(db.notes)) db.notes = [];
   if (!Array.isArray(db.moods)) db.moods = [];
 }
 

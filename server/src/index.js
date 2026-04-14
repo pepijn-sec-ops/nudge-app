@@ -15,6 +15,7 @@ import preferencesRoutes from './routes/preferences.js';
 import adminRoutes from './routes/admin.js';
 import accountRoutes from './routes/account.js';
 import presenceRoutes from './routes/presence.js';
+import notesRoutes from './routes/notes.js';
 
 import { closeDb, isUsingPostgres } from './db.js';
 
@@ -75,6 +76,7 @@ app.use('/api/preferences', preferencesRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/presence', presenceRoutes);
+app.use('/api/notes', notesRoutes);
 
 // ✅ SERVE FRONTEND (IMPORTANT FIX)
 const __dirname = dirname(fileURLToPath(import.meta.url));

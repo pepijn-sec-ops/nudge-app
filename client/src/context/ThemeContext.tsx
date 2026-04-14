@@ -12,11 +12,11 @@ const accentPresets: Record<string, { primary: string; accent: string; avatar: s
 /** Quick palette presets: override core CSS variables without a full page reload. */
 const uiColorPresets: Record<string, { bg: string; text: string; card: string; primary: string; accent: string }> = {
   midnight: {
-    bg: 'linear-gradient(165deg,#0f172a 0%,#1e1b4b 48%,#312e81 100%)',
-    text: '#f1f5f9',
-    card: 'rgba(255,255,255,0.09)',
-    primary: '#818cf8',
-    accent: '#c4b5fd',
+    bg: 'linear-gradient(165deg,#eef2ff 0%,#e0e7ff 45%,#dbeafe 100%)',
+    text: '#1e3a8a',
+    card: 'rgba(255,255,255,0.92)',
+    primary: '#2563eb',
+    accent: '#60a5fa',
   },
   forest: {
     bg: 'linear-gradient(165deg,#ecfdf5 0%,#d1fae5 45%,#bbf7d0 100%)',
@@ -26,11 +26,11 @@ const uiColorPresets: Record<string, { bg: string; text: string; card: string; p
     accent: '#86efac',
   },
   sunset: {
-    bg: 'linear-gradient(165deg,#fff7ed 0%,#ffedd5 40%,#fecdd3 100%)',
-    text: '#7c2d12',
-    card: 'rgba(255,255,255,0.82)',
-    primary: '#ea580c',
-    accent: '#fb923c',
+    bg: 'linear-gradient(165deg,#fff1f2 0%,#ffe4e6 38%,#fecdd3 100%)',
+    text: '#881337',
+    card: 'rgba(255,255,255,0.86)',
+    primary: '#dc2626',
+    accent: '#fb7185',
   },
   dawn: {
     bg: 'linear-gradient(165deg,#fefce8 0%,#e0f2fe 50%,#fae8ff 100%)',

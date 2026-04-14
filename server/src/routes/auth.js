@@ -8,6 +8,8 @@ import { normalizeRole } from '../roles.js';
 const router = Router();
 
 function publicUser(u) {
+  const rawBuddy = String(u?.preferences?.buddyId || '').trim().toLowerCase();
+  const buddyId = rawBuddy === 'dog' ? 'bruno' : rawBuddy;
   return {
 	id: u.id,
 	name: u.name,
@@ -15,7 +17,10 @@ function publicUser(u) {
 	role: normalizeRole(u.role),
 	xp: u.xp,
 	badges: u.badges,
-	preferences: u.preferences,
+	preferences: {
+	  ...u.preferences,
+	  buddyId: ['luna', 'bolt', 'pip', 'bruno'].includes(buddyId) ? buddyId : 'luna',
+	},
 	currentWorkSession: u.currentWorkSession ?? null,
   };
 }

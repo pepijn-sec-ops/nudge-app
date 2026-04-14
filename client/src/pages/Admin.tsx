@@ -135,7 +135,7 @@ export default function Admin() {
     })) || [];
 
   return (
-    <div className="space-y-6 text-slate-100">
+    <div className="admin-readable space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-extrabold text-white">Admin panel</h1>

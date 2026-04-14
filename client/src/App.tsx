@@ -9,6 +9,7 @@ import Tasks from './pages/Tasks';
 import Work from './pages/Work';
 import Stats from './pages/Stats';
 import Settings from './pages/Settings';
+import Notes from './pages/Notes';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="focus" element={<Focus />} />
               <Route path="tasks" element={<Tasks />} />
               <Route path="work" element={<Work />} />
+              <Route path="notes" element={<Notes />} />
               <Route path="stats" element={<Stats />} />
               <Route path="settings" element={<Settings />} />
               <Route path="profile" element={<Settings />} />

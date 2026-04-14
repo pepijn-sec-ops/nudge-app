@@ -79,7 +79,7 @@ export type Preferences = {
   avatarColor: string;
   accentColor: string;
   avatarId: string;
-  buddyId: 'luna' | 'bolt' | 'pip';
+  buddyId: 'luna' | 'bolt' | 'pip' | 'bruno';
   motivationalMessages: string[];
   animationsEnabled: boolean;
   vibrationEnabled: boolean;
@@ -105,6 +105,11 @@ export type Preferences = {
   boltAccessoryHat?: boolean;
   boltAccessoryGlasses?: boolean;
   sessionCompleteSound?: 'lofi' | 'digital' | 'nature';
+  profileHeadline?: string;
+  profilePronouns?: string;
+  profileLogoId?: 'leaf' | 'spark' | 'rocket' | 'target' | 'heart' | 'star';
+  profileLogoColor?: string;
+  profileImageDataUrl?: string;
 };
 
 export type Task = {
@@ -126,4 +131,14 @@ export type WorkSessionState = {
   accumulatedActiveMs: number;
   isPaused: boolean;
   pauseStartedAt: string | null;
+};
+
+export type Note = {
+  id: string;
+  userId: string;
+  content: string;
+  pinned: boolean;
+  context: 'focus' | 'work' | 'general';
+  createdAt: string;
+  updatedAt?: string;
 };
