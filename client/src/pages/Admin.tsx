@@ -102,6 +102,21 @@ export default function Admin() {
   const [newUserAdmin, setNewUserAdmin] = useState(false);
   const [userCreateMsg, setUserCreateMsg] = useState('');
 
+  const inviteLinkForCode = useCallback((code: string) => {
+    const base = window.location.origin;
+    return `${base}/register?invite=${encodeURIComponent(code)}`;
+  }, []);
+
+  const copyInviteLink = useCallback(async (code: string) => {
+    const link = inviteLinkForCode(code);
+    try {
+      await navigator.clipboard.writeText(link);
+      setAccessMsg(`Invite link copied for ${code}.`);
+    } catch {
+      setAccessMsg(`Copy failed. Share manually: ${link}`);
+    }
+  }, [inviteLinkForCode]);
+
   const loadAll = useCallback(async () => {
     const [o, a, u, c] = await Promise.all([
       api<Overview>('/api/admin/overview'),
@@ -393,10 +408,11 @@ export default function Admin() {
             </div>
 
             <div className="mt-6 overflow-x-auto rounded-2xl border border-white/40">
-              <table className="w-full min-w-[520px] text-left text-sm text-[color:var(--nudge-text)]">
+              <table className="w-full min-w-[700px] text-left text-sm text-[color:var(--nudge-text)]">
                 <thead className="bg-white/70 text-xs font-bold uppercase opacity-70">
                   <tr>
                     <th className="px-3 py-2">Code</th>
+                    <th className="px-3 py-2">Invite link</th>
                     <th className="px-3 py-2">Uses</th>
                     <th className="px-3 py-2">Note</th>
                     <th className="px-3 py-2">Status</th>
@@ -407,6 +423,15 @@ export default function Admin() {
                   {(cfg.inviteCodes || []).map((inv) => (
                     <tr key={inv.id} className="border-t border-black/10">
                       <td className="px-3 py-2 font-mono font-bold">{inv.code}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-[color:var(--nudge-primary)] underline"
+                          onClick={() => void copyInviteLink(inv.code)}
+                        >
+                          Copy link
+                        </button>
+                      </td>
                       <td className="px-3 py-2">
                         {inv.uses}
                         {inv.maxUses != null ? ` / ${inv.maxUses}` : ' / ∞'}

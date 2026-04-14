@@ -16,10 +16,26 @@ import adminRoutes from './routes/admin.js';
 import accountRoutes from './routes/account.js';
 import presenceRoutes from './routes/presence.js';
 import notesRoutes from './routes/notes.js';
+import { createRateLimiter } from './middleware/rateLimit.js';
 
-import { closeDb, isUsingPostgres } from './db.js';
+import { closeDb, isUsingPostgres, readDb } from './db.js';
 
 const app = express();
+const authLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 120,
+  message: 'Too many auth requests. Please try again shortly.',
+});
+const authSensitiveLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: 'Too many login/register attempts. Please wait before trying again.',
+});
+const adminLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 300,
+  message: 'Too many admin requests. Please slow down and try again.',
+});
 
 // 🔥 CRITICAL FIX (Render dynamic port)
 const PORT = process.env.PORT || 10000;
@@ -59,21 +75,29 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ✅ REGISTRATION STATUS
-app.get('/api/registration-status', (_req, res) => {
-  res.json({
-	mode: 'invite',
-	needsInvite: true,
-	message: 'Invite required',
-  });
+app.get('/api/registration-status', async (_req, res) => {
+  try {
+    const db = await readDb();
+    const mode = db.globalConfig?.registrationMode || 'open';
+    const needsInvite = mode === 'invite';
+    let message = 'Anyone can create an account.';
+    if (mode === 'closed') message = 'New self-registration is disabled. Ask your administrator to create an account.';
+    if (mode === 'invite') message = 'Invite required.';
+    res.json({ mode, needsInvite, message });
+  } catch {
+    res.status(500).json({ error: 'Could not read registration settings' });
+  }
 });
 
 // ✅ ROUTES
-app.use('/api/auth', authRoutes);
+app.use('/api/auth/login', authSensitiveLimiter);
+app.use('/api/auth/register', authSensitiveLimiter);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/preferences', preferencesRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/presence', presenceRoutes);
 app.use('/api/notes', notesRoutes);

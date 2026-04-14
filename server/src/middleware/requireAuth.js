@@ -18,6 +18,11 @@ export async function requireAuth(req, res, next) {
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
+    const userTokenVersion = Math.max(0, Number(user.tokenVersion) || 0);
+    const tokenVersion = Math.max(0, Number(decoded?.tv) || 0);
+    if (tokenVersion !== userTokenVersion) {
+      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    }
     const role = normalizeRole(user.role);
     req.user = {
       id: user.id,

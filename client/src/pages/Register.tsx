@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -13,12 +13,14 @@ type RegStatus = {
 export default function Register() {
   const { register } = useAuth();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<RegStatus | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [err, setErr] = useState('');
+  const inviteFromLink = searchParams.get('invite')?.trim() || '';
 
   useEffect(() => {
   void (async () => {
@@ -34,6 +36,10 @@ export default function Register() {
 	}
   })();
 }, []);
+
+  useEffect(() => {
+    if (inviteFromLink) setInviteCode(inviteFromLink.toUpperCase());
+  }, [inviteFromLink]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +76,7 @@ export default function Register() {
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             {status?.needsInvite && (
               <label className="block text-left text-sm font-semibold">
-                Invite code
+                Invite code {inviteFromLink ? '(from link)' : ''}
                 <input
                   className="mt-1 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 font-mono outline-none ring-[color:var(--nudge-primary)] focus:ring-2"
                   value={inviteCode}

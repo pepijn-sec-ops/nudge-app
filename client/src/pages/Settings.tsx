@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { isUserAdmin } from '../lib/roles';
 import { motion } from 'motion/react';
@@ -28,7 +28,7 @@ const timezones = [
 export default function Settings() {
   const { pathname } = useLocation();
   const isProfileRoute = pathname.endsWith('/profile');
-  const { user, refreshUser, setUserLocal } = useAuth();
+  const { user, refreshUser, setUserLocal, logout } = useAuth();
   const p = user?.preferences;
   const [messages, setMessages] = useState('');
   const [profileName, setProfileName] = useState('');
@@ -36,6 +36,15 @@ export default function Settings() {
   const [newPw, setNewPw] = useState('');
   const [pwMsg, setPwMsg] = useState('');
   const [saveErr, setSaveErr] = useState('');
+  const [activeTab, setActiveTab] = useState<'profile' | 'focus' | 'audio' | 'appearance' | 'security' | 'advanced'>(
+    isProfileRoute ? 'profile' : 'appearance',
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSaveBody, setLastSaveBody] = useState<Record<string, unknown> | null>(null);
+  const [securitySessions, setSecuritySessions] = useState<
+    Array<{ id: string; createdAt: string; lastSeenAt: string; ip: string; userAgent: string }>
+  >([]);
 
   useEffect(() => {
     if (p?.motivationalMessages) setMessages(p.motivationalMessages.join('\n'));
@@ -47,10 +56,29 @@ export default function Settings() {
 
   if (!user || !p) return null;
 
+  const qTokens = useMemo(
+    () =>
+      searchQuery
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean),
+    [searchQuery],
+  );
+
+  const sectionVisible = (tab: 'profile' | 'focus' | 'audio' | 'appearance' | 'security' | 'advanced', keywords: string[]) => {
+    const hay = keywords.join(' ').toLowerCase();
+    const matches = qTokens.length === 0 || qTokens.every((t) => hay.includes(t));
+    if (qTokens.length > 0) return matches;
+    return activeTab === tab;
+  };
+
   async function savePrefs(body: Record<string, unknown>) {
     if (!user) return;
     const currentUser: User = user;
     setSaveErr('');
+    setSaveState('saving');
+    setLastSaveBody(body);
     try {
       const data = await api<{ preferences: User['preferences'] }>('/api/preferences', {
         method: 'PUT',
@@ -60,7 +88,12 @@ export default function Settings() {
         ...currentUser,
         preferences: data.preferences,
       });
+      setSaveState('saved');
+      window.setTimeout(() => {
+        setSaveState((s) => (s === 'saved' ? 'idle' : s));
+      }, 1400);
     } catch (e) {
+      setSaveState('error');
       setSaveErr(e instanceof Error ? e.message : 'Could not save settings');
     }
   }
@@ -88,6 +121,21 @@ export default function Settings() {
     }
   }
 
+  async function loadSecuritySessions() {
+    try {
+      const data = await api<{ sessions: Array<{ id: string; createdAt: string; lastSeenAt: string; ip: string; userAgent: string }> }>(
+        '/api/account/security/sessions',
+      );
+      setSecuritySessions(data.sessions || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'security') void loadSecuritySessions();
+  }, [activeTab]);
+
   const card = 'rounded-[2rem] border border-white/40 bg-[color:var(--nudge-card)] p-6 shadow-xl backdrop-blur-md';
   const label = 'block text-left text-sm font-bold text-[color:var(--nudge-text)]';
   const input =
@@ -107,7 +155,51 @@ export default function Settings() {
             ? 'Personalize Bolt, color mood, sounds, and your account — all in one calm place.'
             : 'Tune Nudge to your senses, schedule, and account.'}
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold">
+          {saveState === 'saving' && <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">Saving…</span>}
+          {saveState === 'saved' && <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">Saved</span>}
+          {saveState === 'error' && <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-800">Save failed</span>}
+          {saveState === 'error' && lastSaveBody && (
+            <button
+              type="button"
+              className="rounded-full bg-white/70 px-3 py-1 text-[color:var(--nudge-text)]"
+              onClick={() => void savePrefs(lastSaveBody)}
+            >
+              Retry last save
+            </button>
+          )}
+        </div>
         {saveErr && <p className="mt-2 text-sm font-semibold text-rose-700">{saveErr}</p>}
+      </div>
+
+      <div className="rounded-[2rem] border border-white/40 bg-[color:var(--nudge-card)] p-3 shadow-lg backdrop-blur-md">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['profile', 'Profile'],
+            ['focus', 'Focus'],
+            ['audio', 'Audio'],
+            ['appearance', 'Appearance'],
+            ['security', 'Security'],
+            ['advanced', 'Advanced'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`rounded-[1.5rem] px-4 py-2 text-xs font-extrabold ${
+                activeTab === id ? 'bg-[color:var(--nudge-primary)] text-white shadow' : 'bg-white/70'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-2xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-semibold"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search settings (voice, theme, timezone, password...)"
+        />
       </div>
 
       {isUserAdmin(user.role) && (
@@ -125,7 +217,7 @@ export default function Settings() {
         </section>
       )}
 
-      <section className={card}>
+      {sectionVisible('appearance', ['color mood preset palette midnight forest sunset dawn']) && <section className={card}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Color mood</h2>
         <p className="mt-1 text-sm opacity-70">
           Instant palette for background, text, and buttons — no reload. Default follows your structural theme
@@ -155,9 +247,9 @@ export default function Settings() {
             </button>
           ))}
         </div>
-      </section>
+      </section>}
 
-      <section className={card}>
+      {sectionVisible('profile', ['account profile name email password']) && <section className={card}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Account</h2>
         <p className="mt-1 text-sm opacity-70">Profile name and password (stored securely on the server).</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -202,9 +294,9 @@ export default function Settings() {
           </button>
           {pwMsg && <span className="text-sm font-semibold text-[color:var(--nudge-text)]">{pwMsg}</span>}
         </div>
-      </section>
+      </section>}
 
-      <section className={card}>
+      {sectionVisible('appearance', ['appearance theme buddy primary accent']) && <section className={card}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Appearance</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className={label}>
@@ -253,9 +345,9 @@ export default function Settings() {
             />
           </label>
         </div>
-      </section>
+      </section>}
 
-      <section className={`${card} bg-white/60`}>
+      {sectionVisible('appearance', ['interface palette accent preset coral ocean lavender forest sunset']) && <section className={`${card} bg-white/60`}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Interface palette</h2>
         <p className="mt-1 text-sm opacity-70">
           Quick brand mixes (overrides custom colors below until you pick “Custom”).
@@ -275,9 +367,9 @@ export default function Settings() {
             <option value="sunset">Sunset</option>
           </select>
         </label>
-      </section>
+      </section>}
 
-      <section className={`${card} bg-white/60`}>
+      {sectionVisible('focus', ['focus audio defaults ambient default focus length session end chime tips']) && <section className={`${card} bg-white/60`}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Focus & audio defaults</h2>
         <p className="mt-1 text-sm opacity-70">Applied when you open Focus (unless you start from a task preset).</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -348,9 +440,9 @@ export default function Settings() {
             changing ambient levels.
           </p>
         )}
-      </section>
+      </section>}
 
-      <section className={card}>
+      {sectionVisible('audio', ['voice alerts speech rate pitch tts minutes thresholds']) && <section className={card}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Voice alerts</h2>
         <p className="mt-1 text-sm opacity-70">
           When Focus voice cues are off, these minute marks apply. When they are on, the timer uses 10-minute marks
@@ -410,9 +502,9 @@ export default function Settings() {
         <p className="mt-3 text-xs opacity-60">
           Rate and pitch use the browser speech engine; results vary slightly by device.
         </p>
-      </section>
+      </section>}
 
-      <section className={`${card} bg-white/60`}>
+      {sectionVisible('profile', ['schedule region timezone week starts']) && <section className={`${card} bg-white/60`}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Schedule & region</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className={label}>
@@ -441,9 +533,9 @@ export default function Settings() {
             calendar views.
           </p>
         </div>
-      </section>
+      </section>}
 
-      <section className={`${card} bg-white/60`}>
+      {sectionVisible('profile', ['motivation voice tts language messages']) && <section className={`${card} bg-white/60`}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Motivation & voice</h2>
         <label className={label}>
           Rotating home messages (one per line)
@@ -462,9 +554,9 @@ export default function Settings() {
           Voice / TTS language (BCP-47, e.g. en-US, nl-NL)
           <input className={input} value={p.language} onChange={(e) => void savePrefs({ language: e.target.value })} />
         </label>
-      </section>
+      </section>}
 
-      <section className={`${card} bg-white/60`}>
+      {sectionVisible('appearance', ['comfort layout font family font size compact high contrast vibration animations daily goal']) && <section className={`${card} bg-white/60`}>
         <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Comfort & layout</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className={label}>
@@ -530,8 +622,46 @@ export default function Settings() {
             />
           </label>
         </div>
-      </section>
+      </section>}
 
+      {sectionVisible('security', ['security sessions devices logout all']) && (
+        <section className={card}>
+          <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Security</h2>
+          <p className="mt-1 text-sm opacity-70">Review recent sign-ins and log out all devices if needed.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-[2rem] bg-white/80 px-4 py-2 text-sm font-extrabold shadow"
+              onClick={() => void loadSecuritySessions()}
+            >
+              Refresh sessions
+            </button>
+            <button
+              type="button"
+              className="rounded-[2rem] bg-rose-600 px-4 py-2 text-sm font-extrabold text-white shadow"
+              onClick={async () => {
+                if (!confirm('Log out all devices? You will need to sign in again.')) return;
+                await api('/api/account/security/logout-all', { method: 'POST', body: '{}' });
+                logout();
+              }}
+            >
+              Log out all devices
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {securitySessions.map((s) => (
+              <div key={s.id} className="rounded-2xl bg-white/60 p-3 text-sm">
+                <p className="font-bold">{new Date(s.lastSeenAt || s.createdAt).toLocaleString()}</p>
+                <p className="opacity-70">IP: {s.ip || 'unknown'}</p>
+                <p className="line-clamp-1 opacity-70">{s.userAgent || 'Unknown device'}</p>
+              </div>
+            ))}
+            {securitySessions.length === 0 && <p className="text-sm opacity-70">No recent sessions.</p>}
+          </div>
+        </section>
+      )}
+
+      {sectionVisible('advanced', ['danger reset progression reset all data']) && (
       <section className="rounded-[2rem] border border-rose-200 bg-rose-50/80 p-6 shadow-lg backdrop-blur-md">
         <h2 className="text-xl font-extrabold text-rose-900">Danger zone</h2>
         <p className="mt-2 text-sm text-rose-900/80">
@@ -562,6 +692,7 @@ export default function Settings() {
           </button>
         </div>
       </section>
+      )}
     </div>
   );
 }

@@ -51,4 +51,31 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/security/sessions', requireAuth, async (req, res) => {
+  const db = await readDb();
+  const u = db.users.find((x) => x.id === req.user.id);
+  const sessions = Array.isArray(u?.authSessions) ? u.authSessions : [];
+  const sorted = [...sessions]
+    .sort((a, b) => String(b.lastSeenAt || b.createdAt).localeCompare(String(a.lastSeenAt || a.createdAt)))
+    .slice(0, 20)
+    .map((s) => ({
+      id: String(s.id || ''),
+      createdAt: String(s.createdAt || ''),
+      lastSeenAt: String(s.lastSeenAt || s.createdAt || ''),
+      ip: String(s.ip || ''),
+      userAgent: String(s.userAgent || ''),
+    }));
+  res.json({ sessions: sorted });
+});
+
+router.post('/security/logout-all', requireAuth, async (req, res) => {
+  await writeDb((d) => {
+    const u = d.users.find((x) => x.id === req.user.id);
+    if (!u) return;
+    u.tokenVersion = Math.max(0, Number(u.tokenVersion) || 0) + 1;
+    u.authSessions = [];
+  });
+  res.json({ ok: true });
+});
+
 export default router;

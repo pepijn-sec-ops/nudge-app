@@ -271,6 +271,8 @@ router.post('/users', async (req, res) => {
     preferences: defaultPreferences(),
     currentWorkSession: null,
     currentFocusSession: null,
+    tokenVersion: 0,
+    authSessions: [],
     createdAt: new Date().toISOString(),
   };
   await writeDb((d) => {
