@@ -227,7 +227,6 @@ export default function Work() {
         </label>
         <motion.div
           className="mt-8 text-6xl font-black tabular-nums text-[color:var(--nudge-text)] sm:text-7xl"
-          key={displayMs}
           initial={{ scale: 0.98, opacity: 0.7 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.2 }}

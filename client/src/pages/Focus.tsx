@@ -277,10 +277,6 @@ export default function Focus() {
     void ambientAudio.resume();
     sendHeartbeat(true);
 
-    if (prefsRef.current?.focusVoiceCuesEnabled !== false) {
-      tts.announceStart(minutes, lang);
-    }
-
     tickRef.current = window.setInterval(() => {
       setRemaining((r) => {
         const now = Date.now();
@@ -486,6 +482,9 @@ export default function Focus() {
                 <button
                   onClick={() => {
                     tts.unlock();
+                    if (prefsRef.current?.focusVoiceCuesEnabled !== false) {
+                      tts.announceStart(minutes, lang);
+                    }
                     setRunning(true);
                     setPaused(false);
                     setStuckBreakSec(0);
