@@ -1,6 +1,9 @@
 import { ambientAudio } from './audioService';
-import { Capacitor } from '@capacitor/core';
-import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+type NativeTtsPlugin = {
+  speak(options: { text: string; lang?: string; rate?: number; pitch?: number; volume?: number }): Promise<void>;
+};
 
 let muted = false;
 let announcementsEnabled = true;
@@ -10,6 +13,7 @@ let pitch = 1;
 let unlocked = false;
 let voices: SpeechSynthesisVoice[] = [];
 const nativeTtsAvailable = Capacitor.isNativePlatform();
+const NativeTextToSpeech = registerPlugin<NativeTtsPlugin>('TextToSpeech');
 
 function speakMinutesRemaining(minutes: number, lang: string) {
   const base = lang.split('-')[0] || 'en';
@@ -94,7 +98,7 @@ export const tts = {
 	if (nativeTtsAvailable) {
 	  if (!unlocked) this.unlock();
 	  ambientAudio.duckForSpeech();
-	  void TextToSpeech.speak({
+	  void NativeTextToSpeech.speak({
 		text,
 		lang: lang || 'en-US',
 		rate,
