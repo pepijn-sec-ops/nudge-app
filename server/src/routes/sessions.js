@@ -12,6 +12,25 @@ import {
 const router = Router();
 router.use(requireAuth);
 
+function normalizeFocusSession(body) {
+  const plannedMinutes = Math.min(180, Math.max(1, Math.round(Number(body?.plannedMinutes) || 25)));
+  const remainingSeconds = Math.min(
+    plannedMinutes * 60,
+    Math.max(0, Math.round(Number(body?.remainingSeconds) || plannedMinutes * 60)),
+  );
+  const isPaused = !!body?.isPaused;
+  const endsAt = typeof body?.endsAt === 'string' ? body.endsAt : null;
+  const stuckBreakEndAt = typeof body?.stuckBreakEndAt === 'string' ? body.stuckBreakEndAt : null;
+  return {
+    plannedMinutes,
+    remainingSeconds,
+    isPaused,
+    endsAt: isPaused ? null : endsAt,
+    stuckBreakEndAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 router.post('/focus/complete', async (req, res) => {
   const {
     plannedMinutes,
@@ -70,6 +89,7 @@ router.post('/focus/complete', async (req, res) => {
         createdAt: new Date().toISOString(),
       });
     }
+    user.currentFocusSession = null;
   });
 
   const user = (await readDb()).users.find((u) => u.id === req.user.id);
@@ -81,6 +101,26 @@ router.post('/focus/complete', async (req, res) => {
     unlockedAvatars: unlockedAvatarsForLevel(levelFromXp(user.xp)),
     unlockedThemes: unlockedThemesForLevel(levelFromXp(user.xp)),
   });
+});
+
+router.put('/focus/active', async (req, res) => {
+  const body = req.body || {};
+  await writeDb((d) => {
+    const user = d.users.find((u) => u.id === req.user.id);
+    if (!user) return;
+    if (body.clear) {
+      user.currentFocusSession = null;
+    } else {
+      user.currentFocusSession = normalizeFocusSession(body);
+    }
+  });
+  const u = (await readDb()).users.find((x) => x.id === req.user.id);
+  res.json({ currentFocusSession: u.currentFocusSession || null });
+});
+
+router.get('/focus/active', async (req, res) => {
+  const u = (await readDb()).users.find((x) => x.id === req.user.id);
+  res.json({ currentFocusSession: u.currentFocusSession || null });
 });
 
 router.post('/work/complete', async (req, res) => {

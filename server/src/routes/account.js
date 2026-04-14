@@ -25,6 +25,7 @@ router.patch('/profile', requireAuth, async (req, res) => {
       badges: u.badges,
       preferences: u.preferences,
       currentWorkSession: u.currentWorkSession,
+      currentFocusSession: u.currentFocusSession ?? null,
     },
   });
 });

@@ -22,6 +22,17 @@ export default function Work() {
   const [moodOpen, setMoodOpen] = useState(false);
   const finishRef = useRef<(m?: MoodValue, skipped?: boolean) => void>(() => {});
 
+  const setCurrentWorkSessionLocal = useCallback(
+    (currentWorkSession: WorkSessionState | null) => {
+      if (!user) return;
+      setUserLocal({
+        ...user,
+        currentWorkSession,
+      });
+    },
+    [user, setUserLocal],
+  );
+
   const syncServer = useCallback(async (payload: WorkSessionState | { clear: true }) => {
     try {
       await api('/api/sessions/work/active', {
@@ -43,6 +54,29 @@ export default function Work() {
     setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
     setDisplayMs(displayFromServer(s));
   }, [user?.currentWorkSession]);
+
+  useEffect(() => {
+    let active = true;
+    void api<{ currentWorkSession: WorkSessionState | null }>('/api/sessions/work/active')
+      .then((data) => {
+        if (!active) return;
+        const s = data.currentWorkSession;
+        if (!s) return;
+        setProject(s.projectName);
+        setRunning(true);
+        setPaused(s.isPaused);
+        setAccMs(s.accumulatedActiveMs);
+        setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
+        setDisplayMs(displayFromServer(s));
+        setCurrentWorkSessionLocal(s);
+      })
+      .catch(() => {
+        /* offline */
+      });
+    return () => {
+      active = false;
+    };
+  }, [setCurrentWorkSessionLocal]);
 
   useEffect(() => {
     if (!running || paused || segmentStart == null) {
@@ -69,6 +103,7 @@ export default function Work() {
     setPaused(false);
     setRunning(true);
     setDisplayMs(0);
+    setCurrentWorkSessionLocal(payload);
     await syncServer(payload);
   }
 
@@ -80,6 +115,13 @@ export default function Work() {
       setSegmentStart(null);
       setPaused(true);
       setDisplayMs(nextAcc);
+      setCurrentWorkSessionLocal({
+        projectName: project,
+        startedAt: new Date(now).toISOString(),
+        accumulatedActiveMs: nextAcc,
+        isPaused: true,
+        pauseStartedAt: new Date(now).toISOString(),
+      });
       await syncServer({
         projectName: project,
         startedAt: new Date(now).toISOString(),
@@ -90,6 +132,13 @@ export default function Work() {
     } else if (paused) {
       setPaused(false);
       setSegmentStart(now);
+      setCurrentWorkSessionLocal({
+        projectName: project,
+        startedAt: new Date(now).toISOString(),
+        accumulatedActiveMs: accMs,
+        isPaused: false,
+        pauseStartedAt: null,
+      });
       await syncServer({
         projectName: project,
         startedAt: new Date(now).toISOString(),
@@ -130,6 +179,7 @@ export default function Work() {
       setAccMs(0);
       setSegmentStart(null);
       setDisplayMs(0);
+      setCurrentWorkSessionLocal(null);
     };
     setRunning(false);
     setPaused(false);

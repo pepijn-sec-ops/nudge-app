@@ -22,6 +22,7 @@ function publicUser(u) {
 	  buddyId: ['luna', 'bolt', 'pip', 'bruno'].includes(buddyId) ? buddyId : 'luna',
 	},
 	currentWorkSession: u.currentWorkSession ?? null,
+	currentFocusSession: u.currentFocusSession ?? null,
   };
 }
 
@@ -125,6 +126,7 @@ router.post('/register', async (req, res) => {
 	  badges: [],
 	  preferences: defaultPreferences(),
 	  currentWorkSession: null,
+	  currentFocusSession: null,
 	  createdAt: new Date().toISOString(),
 	};
 

@@ -270,6 +270,7 @@ router.post('/users', async (req, res) => {
     badges: [],
     preferences: defaultPreferences(),
     currentWorkSession: null,
+    currentFocusSession: null,
     createdAt: new Date().toISOString(),
   };
   await writeDb((d) => {
@@ -285,6 +286,7 @@ router.post('/users', async (req, res) => {
       badges: user.badges,
       preferences: user.preferences,
       currentWorkSession: null,
+      currentFocusSession: null,
     },
   });
 });

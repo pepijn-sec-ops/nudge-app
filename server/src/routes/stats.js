@@ -173,6 +173,7 @@ router.post('/reset-progress', async (req, res) => {
     if (u) {
       u.xp = 0;
       u.badges = [];
+      u.currentFocusSession = null;
     }
   });
   res.json({ ok: true });
@@ -189,6 +190,7 @@ router.post('/reset-all', async (req, res) => {
       u.xp = 0;
       u.badges = [];
       u.currentWorkSession = null;
+      u.currentFocusSession = null;
     }
   });
   res.json({ ok: true });

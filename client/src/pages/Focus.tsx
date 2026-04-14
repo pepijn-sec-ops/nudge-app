@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, type FocusSessionState } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MoodCheckIn } from '../components/MoodCheckIn';
 import { FocusBuddy } from '../components/FocusBuddy';
@@ -12,6 +12,15 @@ import type { AmbientKind } from '../services/audioService';
 import { tts } from '../services/ttsService';
 
 type Loc = { minutes?: number };
+type PersistedFocusState = {
+  minutes: number;
+  remaining: number;
+  running: boolean;
+  paused: boolean;
+  endAtMs: number | null;
+  stuckBreakEndMs: number | null;
+};
+const FOCUS_SESSION_KEY = 'nudge_focus_session_v1';
 
 export default function Focus() {
   const { user, refreshUser } = useAuth();
@@ -33,14 +42,136 @@ export default function Focus() {
   const [pendingComplete, setPendingComplete] = useState<{ actual: number; planned: number } | null>(null);
 
   const prevRem = useRef(remaining);
+  const lastTickMsRef = useRef(Date.now());
   const tickRef = useRef<number | null>(null);
   const endedRef = useRef(false);
   const prefsRef = useRef(user?.preferences);
 
   const lang = user?.preferences?.language || 'en';
 
+  const syncFocusServer = useCallback(
+    async (payload: FocusSessionState | { clear: true }) => {
+      try {
+        await api('/api/sessions/focus/active', {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        /* offline */
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     tts.unlock();
+  }, []);
+
+  function completeByTimer(planned: number) {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    setRunning(false);
+    setPaused(false);
+    setStuckBreakSec(0);
+    setRemaining(0);
+    sendHeartbeat(false);
+    playSessionCompleteSound('lofi', muteAll);
+    setTimeout(() => {
+      tts.announceComplete(lang);
+    }, 300);
+    setPendingComplete({ actual: planned, planned });
+    setMoodOpen(true);
+    void syncFocusServer({ clear: true });
+  }
+
+  // Restore focus session from server first, then local fallback.
+  useEffect(() => {
+    let active = true;
+    void api<{ currentFocusSession: FocusSessionState | null }>('/api/sessions/focus/active')
+      .then((data) => {
+        if (!active) return;
+        const s = data.currentFocusSession;
+        if (s) {
+          const safeMinutes = Math.max(1, Number(s.plannedMinutes) || 25);
+          setMinutes(safeMinutes);
+          setRunning(true);
+          setPaused(!!s.isPaused);
+          if (!s.isPaused && s.endsAt) {
+            const rem = Math.max(0, Math.ceil((new Date(s.endsAt).getTime() - Date.now()) / 1000));
+            setRemaining(rem);
+            if (rem <= 0) completeByTimer(safeMinutes);
+          } else {
+            setRemaining(Math.max(0, Number(s.remainingSeconds) || safeMinutes * 60));
+          }
+          if (s.stuckBreakEndAt) {
+            const left = Math.max(0, Math.ceil((new Date(s.stuckBreakEndAt).getTime() - Date.now()) / 1000));
+            setStuckBreakSec(left);
+          }
+          return;
+        }
+
+        // Local fallback for offline resumes.
+        try {
+          const raw = localStorage.getItem(FOCUS_SESSION_KEY);
+          if (!raw) return;
+          const saved = JSON.parse(raw) as PersistedFocusState;
+          if (!saved || typeof saved !== 'object') return;
+          const safeMinutes = Math.max(1, Number(saved.minutes) || 25);
+          const safeRemaining = Math.max(0, Number(saved.remaining) || 0);
+          setMinutes(safeMinutes);
+          setRunning(!!saved.running);
+          setPaused(!!saved.paused);
+          if (saved.running && !saved.paused && Number(saved.endAtMs)) {
+            const rem = Math.max(0, Math.ceil((Number(saved.endAtMs) - Date.now()) / 1000));
+            setRemaining(rem);
+            if (rem <= 0) {
+              completeByTimer(safeMinutes);
+            }
+          } else {
+            setRemaining(safeRemaining || safeMinutes * 60);
+          }
+          if (saved.stuckBreakEndMs) {
+            const left = Math.max(0, Math.ceil((Number(saved.stuckBreakEndMs) - Date.now()) / 1000));
+            setStuckBreakSec(left);
+          }
+        } catch {
+          /* ignore malformed persisted timer state */
+        }
+      })
+      .catch(() => {
+        // Local fallback for offline resumes.
+        try {
+          const raw = localStorage.getItem(FOCUS_SESSION_KEY);
+          if (!raw) return;
+          const saved = JSON.parse(raw) as PersistedFocusState;
+          if (!saved || typeof saved !== 'object') return;
+          const safeMinutes = Math.max(1, Number(saved.minutes) || 25);
+          const safeRemaining = Math.max(0, Number(saved.remaining) || 0);
+          setMinutes(safeMinutes);
+          setRunning(!!saved.running);
+          setPaused(!!saved.paused);
+          if (saved.running && !saved.paused && Number(saved.endAtMs)) {
+            const rem = Math.max(0, Math.ceil((Number(saved.endAtMs) - Date.now()) / 1000));
+            setRemaining(rem);
+            if (rem <= 0) {
+              completeByTimer(safeMinutes);
+            }
+          } else {
+            setRemaining(safeRemaining || safeMinutes * 60);
+          }
+          if (saved.stuckBreakEndMs) {
+            const left = Math.max(0, Math.ceil((Number(saved.stuckBreakEndMs) - Date.now()) / 1000));
+            setStuckBreakSec(left);
+          }
+        } catch {
+          /* ignore malformed persisted timer state */
+        }
+      });
+    return () => {
+      active = false;
+    };
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -82,6 +213,49 @@ export default function Focus() {
     if (!running) setStuckBreakSec(0);
   }, [running]);
 
+  useEffect(() => {
+    const payload: PersistedFocusState = {
+      minutes,
+      remaining,
+      running,
+      paused,
+      endAtMs: running && !paused ? Date.now() + remaining * 1000 : null,
+      stuckBreakEndMs: stuckBreakSec > 0 ? Date.now() + stuckBreakSec * 1000 : null,
+    };
+    try {
+      if (!running && remaining === minutes * 60) {
+        localStorage.removeItem(FOCUS_SESSION_KEY);
+      } else {
+        localStorage.setItem(FOCUS_SESSION_KEY, JSON.stringify(payload));
+      }
+    } catch {
+      /* ignore localStorage failures */
+    }
+  }, [minutes, remaining, running, paused, stuckBreakSec]);
+
+  useEffect(() => {
+    if (!running) return;
+    if (paused) {
+      void syncFocusServer({
+        plannedMinutes: minutes,
+        remainingSeconds: remaining,
+        isPaused: true,
+        endsAt: null,
+        stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+    void syncFocusServer({
+      plannedMinutes: minutes,
+      remainingSeconds: remaining,
+      isPaused: false,
+      endsAt: new Date(Date.now() + remaining * 1000).toISOString(),
+      stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [running, paused, minutes, syncFocusServer]);
+
   const sendHeartbeat = useCallback((focusing: boolean) => {
     void api('/api/presence/heartbeat', {
       method: 'POST',
@@ -99,6 +273,7 @@ export default function Focus() {
 
     endedRef.current = false;
     prevRem.current = remaining;
+    lastTickMsRef.current = Date.now();
     void ambientAudio.resume();
     sendHeartbeat(true);
 
@@ -108,8 +283,11 @@ export default function Focus() {
 
     tickRef.current = window.setInterval(() => {
       setRemaining((r) => {
+        const now = Date.now();
+        const elapsedSec = Math.max(1, Math.floor((now - lastTickMsRef.current) / 1000));
+        lastTickMsRef.current = now;
         const prev = prevRem.current;
-        const next = Math.max(0, r - 1);
+        const next = Math.max(0, r - elapsedSec);
         const pref = prefsRef.current;
 
         if (pref?.focusVoiceCuesEnabled !== false) {
@@ -121,22 +299,8 @@ export default function Focus() {
         prevRem.current = next;
 
         if (next === 0 && !endedRef.current) {
-          endedRef.current = true;
-
           if (tickRef.current) window.clearInterval(tickRef.current);
-
-          setRunning(false);
-          setPaused(false);
-          sendHeartbeat(false);
-
-          playSessionCompleteSound('lofi', muteAll);
-
-          setTimeout(() => {
-            tts.announceComplete(lang);
-          }, 300);
-
-          setPendingComplete({ actual: minutes, planned: minutes });
-          setMoodOpen(true);
+          completeByTimer(minutes);
         }
 
         return next;
@@ -153,6 +317,7 @@ export default function Focus() {
     setRemaining(m * 60);
     setRunning(false);
     setPaused(false);
+    void syncFocusServer({ clear: true });
   }
 
   async function patchFocusPreference(body: Record<string, unknown>) {
@@ -177,6 +342,12 @@ export default function Focus() {
     setMoodOpen(false);
     setPendingComplete(null);
     setRemaining(minutes * 60);
+    void syncFocusServer({ clear: true });
+    try {
+      localStorage.removeItem(FOCUS_SESSION_KEY);
+    } catch {
+      /* ignore localStorage failures */
+    }
   }
 
   async function saveIdeaNote(pinned = false) {
@@ -317,6 +488,7 @@ export default function Focus() {
                     tts.unlock();
                     setRunning(true);
                     setPaused(false);
+                    setStuckBreakSec(0);
                   }}
                   className="w-full py-3 rounded-full bg-green-800 text-white text-lg"
                   style={{ backgroundColor: primary }}
@@ -348,10 +520,12 @@ export default function Focus() {
                     onClick={() => {
                       setRunning(false);
                       setPaused(false);
+                      setStuckBreakSec(0);
                       const spent = minutes * 60 - remaining;
                       const actualMin = Math.max(1, Math.round(spent / 60));
                       setPendingComplete({ actual: actualMin, planned: minutes });
                       setMoodOpen(true);
+                      void syncFocusServer({ clear: true });
                     }}
                     className="px-5 py-2 bg-gray-100 rounded-full"
                     type="button"

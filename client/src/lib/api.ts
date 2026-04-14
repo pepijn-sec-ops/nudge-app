@@ -71,6 +71,7 @@ export type User = {
   badges: string[];
   preferences: Preferences;
   currentWorkSession: WorkSessionState | null;
+  currentFocusSession: FocusSessionState | null;
 };
 
 export type Preferences = {
@@ -131,6 +132,15 @@ export type WorkSessionState = {
   accumulatedActiveMs: number;
   isPaused: boolean;
   pauseStartedAt: string | null;
+};
+
+export type FocusSessionState = {
+  plannedMinutes: number;
+  remainingSeconds: number;
+  isPaused: boolean;
+  endsAt: string | null;
+  stuckBreakEndAt: string | null;
+  updatedAt: string;
 };
 
 export type Note = {
