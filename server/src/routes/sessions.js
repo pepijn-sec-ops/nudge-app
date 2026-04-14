@@ -28,6 +28,10 @@ function normalizeFocusSession(body) {
     endsAt: isPaused ? null : endsAt,
     stuckBreakEndAt,
     updatedAt: new Date().toISOString(),
+    sessionRef:
+      typeof body?.sessionRef === 'string' && body.sessionRef.trim()
+        ? body.sessionRef.trim().slice(0, 120)
+        : null,
   };
 }
 
@@ -40,6 +44,7 @@ router.post('/focus/complete', async (req, res) => {
     localHour,
     mood,
     moodSkipped,
+    sessionRef,
   } = req.body || {};
   const minutes = Math.max(0, Math.round(Number(actualMinutes) || 0));
   const planned = Math.max(1, Math.round(Number(plannedMinutes) || minutes || 1));
@@ -53,6 +58,8 @@ router.post('/focus/complete', async (req, res) => {
     taskId: taskId || null,
     taskName: taskName || null,
     localHour: typeof localHour === 'number' ? localHour : null,
+    sessionRef:
+      typeof sessionRef === 'string' && sessionRef.trim() ? sessionRef.trim().slice(0, 120) : null,
     completedAt: new Date().toISOString(),
   };
 
@@ -124,7 +131,7 @@ router.get('/focus/active', async (req, res) => {
 });
 
 router.post('/work/complete', async (req, res) => {
-  const { actualMinutes, projectName, localHour, mood, moodSkipped } = req.body || {};
+  const { actualMinutes, projectName, localHour, mood, moodSkipped, sessionRef } = req.body || {};
   const minutes = Math.max(0, Math.round(Number(actualMinutes) || 0));
 
   const session = {
@@ -134,6 +141,8 @@ router.post('/work/complete', async (req, res) => {
     durationMinutes: minutes,
     projectName: projectName || 'Open work',
     localHour: typeof localHour === 'number' ? localHour : null,
+    sessionRef:
+      typeof sessionRef === 'string' && sessionRef.trim() ? sessionRef.trim().slice(0, 120) : null,
     completedAt: new Date().toISOString(),
   };
 
@@ -192,6 +201,10 @@ router.put('/work/active', async (req, res) => {
         accumulatedActiveMs: Math.max(0, Number(body.accumulatedActiveMs) || 0),
         isPaused: !!body.isPaused,
         pauseStartedAt: body.pauseStartedAt || null,
+        sessionRef:
+          typeof body.sessionRef === 'string' && body.sessionRef.trim()
+            ? body.sessionRef.trim().slice(0, 120)
+            : null,
       };
     }
   });

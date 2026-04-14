@@ -1,7 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { isUserAdmin } from '../lib/roles';
+import { flushOfflineQueue, getOfflineQueueCount, onOfflineQueueChange } from '../lib/api';
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-2xl px-3 py-2 text-sm font-semibold transition ${
@@ -11,6 +13,23 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 export function AppShell() {
   const { user, logout } = useAuth();
   const anim = user?.preferences?.animationsEnabled !== false;
+  const [offlineQueued, setOfflineQueued] = useState(() => getOfflineQueueCount());
+
+  useEffect(() => {
+    const off = onOfflineQueueChange((count) => setOfflineQueued(count));
+    const onOnline = () => {
+      void flushOfflineQueue().then(() => setOfflineQueued(getOfflineQueueCount()));
+    };
+    window.addEventListener('online', onOnline);
+    const id = window.setInterval(() => {
+      void flushOfflineQueue().then(() => setOfflineQueued(getOfflineQueueCount()));
+    }, 30000);
+    return () => {
+      off();
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(id);
+    };
+  }, []);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -33,6 +52,16 @@ export function AppShell() {
             <span>Nudge</span>
           </NavLink>
           <nav className="flex flex-wrap items-center gap-1">
+            {offlineQueued > 0 && (
+              <button
+                type="button"
+                onClick={() => void flushOfflineQueue().then(() => setOfflineQueued(getOfflineQueueCount()))}
+                className="rounded-2xl bg-amber-100 px-3 py-2 text-xs font-extrabold text-amber-900 shadow"
+                title="Pending offline actions waiting to sync"
+              >
+                Sync pending ({offlineQueued})
+              </button>
+            )}
             <NavLink to="/" end className={linkClass}>
               Home
             </NavLink>

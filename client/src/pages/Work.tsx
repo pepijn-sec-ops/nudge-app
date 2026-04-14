@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { api, type User, type WorkSessionState } from '../lib/api';
+import { api, apiWithOfflineQueue, type User, type WorkSessionState } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MoodCheckIn, type MoodValue } from '../components/MoodCheckIn';
 
@@ -19,6 +19,7 @@ export default function Work() {
   const [segmentStart, setSegmentStart] = useState<number | null>(null);
   const [displayMs, setDisplayMs] = useState(0);
   const [ideaNote, setIdeaNote] = useState('');
+  const [sessionRef, setSessionRef] = useState<string | null>(null);
   const [moodOpen, setMoodOpen] = useState(false);
   const finishRef = useRef<(m?: MoodValue, skipped?: boolean) => void>(() => {});
 
@@ -35,7 +36,7 @@ export default function Work() {
 
   const syncServer = useCallback(async (payload: WorkSessionState | { clear: true }) => {
     try {
-      await api('/api/sessions/work/active', {
+      await apiWithOfflineQueue('/api/sessions/work/active', {
         method: 'PUT',
         body: JSON.stringify(payload),
       });
@@ -53,6 +54,7 @@ export default function Work() {
     setAccMs(s.accumulatedActiveMs);
     setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
     setDisplayMs(displayFromServer(s));
+    setSessionRef(s.sessionRef || null);
   }, [user?.currentWorkSession]);
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export default function Work() {
         setAccMs(s.accumulatedActiveMs);
         setSegmentStart(s.isPaused ? null : new Date(s.startedAt).getTime());
         setDisplayMs(displayFromServer(s));
+        setSessionRef(s.sessionRef || null);
         setCurrentWorkSessionLocal(s);
       })
       .catch(() => {
@@ -91,18 +94,21 @@ export default function Work() {
 
   async function handleStart() {
     const now = Date.now();
+    const ref = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_work`;
     const payload: WorkSessionState = {
       projectName: project,
       startedAt: new Date(now).toISOString(),
       accumulatedActiveMs: 0,
       isPaused: false,
       pauseStartedAt: null,
+      sessionRef: ref,
     };
     setAccMs(0);
     setSegmentStart(now);
     setPaused(false);
     setRunning(true);
     setDisplayMs(0);
+    setSessionRef(ref);
     setCurrentWorkSessionLocal(payload);
     await syncServer(payload);
   }
@@ -121,6 +127,7 @@ export default function Work() {
         accumulatedActiveMs: nextAcc,
         isPaused: true,
         pauseStartedAt: new Date(now).toISOString(),
+        sessionRef: sessionRef || undefined,
       });
       await syncServer({
         projectName: project,
@@ -128,6 +135,7 @@ export default function Work() {
         accumulatedActiveMs: nextAcc,
         isPaused: true,
         pauseStartedAt: new Date(now).toISOString(),
+        sessionRef: sessionRef || undefined,
       });
     } else if (paused) {
       setPaused(false);
@@ -138,6 +146,7 @@ export default function Work() {
         accumulatedActiveMs: accMs,
         isPaused: false,
         pauseStartedAt: null,
+        sessionRef: sessionRef || undefined,
       });
       await syncServer({
         projectName: project,
@@ -145,6 +154,7 @@ export default function Work() {
         accumulatedActiveMs: accMs,
         isPaused: false,
         pauseStartedAt: null,
+        sessionRef: sessionRef || undefined,
       });
     }
   }
@@ -157,7 +167,7 @@ export default function Work() {
     finishRef.current = async (mood?: MoodValue, skipped?: boolean) => {
       const localHour = new Date().getHours();
       try {
-        await api('/api/sessions/work/complete', {
+        await apiWithOfflineQueue('/api/sessions/work/complete', {
           method: 'POST',
           body: JSON.stringify({
             actualMinutes: minutes,
@@ -165,6 +175,7 @@ export default function Work() {
             localHour,
             mood,
             moodSkipped: !!skipped || !mood,
+            sessionRef: sessionRef || null,
           }),
         });
         const me = await api<{ user: User }>('/api/auth/me');
@@ -179,6 +190,7 @@ export default function Work() {
       setAccMs(0);
       setSegmentStart(null);
       setDisplayMs(0);
+      setSessionRef(null);
       setCurrentWorkSessionLocal(null);
     };
     setRunning(false);
@@ -193,9 +205,15 @@ export default function Work() {
     const content = ideaNote.trim();
     if (!content) return;
     try {
-      await api('/api/notes', {
+      await apiWithOfflineQueue('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({ content, context: 'work', pinned }),
+        body: JSON.stringify({
+          content,
+          context: 'work',
+          pinned,
+          linkedSessionRef: sessionRef || null,
+          linkedProjectName: project || null,
+        }),
       });
       setIdeaNote('');
     } catch {

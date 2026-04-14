@@ -21,6 +21,7 @@ export type StatsSummary = {
   focusVsWork: { focusMinutes: number; workMinutes: number; focusPct: number; workPct: number };
   avgFocusSession: number;
   streakDays: number;
+  streak?: { current: number; best: number; graceUsed: boolean };
   timeline: { kind: string; at: string; payload: Record<string, unknown> }[];
   moods: { mood: string; createdAt: string }[];
 };
@@ -61,6 +62,16 @@ export function normalizeStatsSummary(raw: unknown): StatsSummary | null {
     ? (r.hourBuckets as StatsSummary['hourBuckets'])
     : Array.from({ length: 24 }, (_, hour) => ({ hour, minutes: 0 }));
 
+  const streakRaw = r.streak as Record<string, unknown> | undefined;
+  const streak =
+    streakRaw && typeof streakRaw === 'object'
+      ? {
+          current: z(streakRaw.current),
+          best: z(streakRaw.best),
+          graceUsed: !!streakRaw.graceUsed,
+        }
+      : undefined;
+
   return {
     xp: z(r.xp),
     level: z(r.level, 1),
@@ -82,6 +93,7 @@ export function normalizeStatsSummary(raw: unknown): StatsSummary | null {
     focusVsWork,
     avgFocusSession: z(r.avgFocusSession),
     streakDays: z(r.streakDays),
+    streak,
     timeline: Array.isArray(r.timeline) ? (r.timeline as StatsSummary['timeline']) : [],
     moods: Array.isArray(r.moods) ? (r.moods as StatsSummary['moods']) : [],
   };

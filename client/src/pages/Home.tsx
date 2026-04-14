@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { api, type Note, type Task } from '../lib/api';
+import { api, apiWithOfflineQueue, type Note, type Task } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 type Summary = {
@@ -10,6 +10,7 @@ type Summary = {
   xp: number;
   level: number;
   focusingCount?: number;
+  streak?: { current: number; best: number; graceUsed: boolean };
   systemNudge?: { message: string; updatedAt: string | null };
 };
 
@@ -20,6 +21,7 @@ export default function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [nudgeVisible, setNudgeVisible] = useState(true);
+  const [quickNote, setQuickNote] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -88,6 +90,21 @@ export default function Home() {
 
   const nudgeMsg = summary?.systemNudge?.message?.trim();
   const nudgeAt = summary?.systemNudge?.updatedAt;
+  const streak = summary?.streak;
+
+  async function saveQuickNote(pinned = false) {
+    const content = quickNote.trim();
+    if (!content) return;
+    try {
+      await apiWithOfflineQueue('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({ content, pinned, context: 'general' }),
+      });
+      setQuickNote('');
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -159,6 +176,62 @@ export default function Home() {
           >
             Start focus
           </Link>
+        </div>
+        {streak && (
+          <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+            <span className="rounded-2xl bg-white/70 px-3 py-1 shadow-sm">Streak: {streak.current} days</span>
+            <span className="rounded-2xl bg-white/70 px-3 py-1 shadow-sm">Best: {streak.best} days</span>
+            {streak.graceUsed && (
+              <span className="rounded-2xl bg-amber-100 px-3 py-1 text-amber-900 shadow-sm">Grace day used</span>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-[2rem] border border-white/40 bg-[color:var(--nudge-card)] p-6 shadow-lg backdrop-blur-md">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-extrabold text-[color:var(--nudge-text)]">Quick actions</h2>
+          <Link to="stats" className="text-sm font-semibold underline">
+            View timeline
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => nav('focus', { state: { minutes: 25 } })}
+            className="rounded-[2rem] bg-[color:var(--nudge-primary)] px-4 py-2 text-sm font-extrabold text-white shadow"
+          >
+            Start Focus 25
+          </button>
+          <button
+            type="button"
+            onClick={() => nav('work')}
+            className="rounded-[2rem] bg-[color:var(--nudge-accent)] px-4 py-2 text-sm font-extrabold text-[color:var(--nudge-text)] shadow"
+          >
+            Resume Work
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={quickNote}
+            onChange={(e) => setQuickNote(e.target.value)}
+            className="flex-1 rounded-2xl border border-black/10 bg-white/80 px-4 py-2 font-semibold"
+            placeholder="Capture note quickly..."
+          />
+          <button
+            type="button"
+            onClick={() => void saveQuickNote(false)}
+            className="rounded-[2rem] bg-[color:var(--nudge-primary)] px-4 py-2 text-sm font-extrabold text-white shadow"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveQuickNote(true)}
+            className="rounded-[2rem] bg-white/80 px-4 py-2 text-sm font-extrabold shadow"
+          >
+            Pin
+          </button>
         </div>
       </section>
 

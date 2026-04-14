@@ -1,4 +1,6 @@
 const TOKEN_KEY = 'nudge_token';
+const OFFLINE_QUEUE_KEY = 'nudge_offline_queue_v1';
+const OFFLINE_QUEUE_EVENT = 'nudge:offline-queue-updated';
 
 /** Base URL for API (no trailing slash). */
 const API_BASE =
@@ -58,6 +60,128 @@ export async function api<T>(
   if (res.status === 204) return undefined as T;
 
   return res.json() as Promise<T>;
+}
+
+export type OfflineMutation = {
+  id: string;
+  path: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body: string;
+  createdAt: string;
+};
+
+function isOfflineError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const msg = String(error.message || '').toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('load failed')
+  );
+}
+
+function readOfflineQueue(): OfflineMutation[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (x): x is OfflineMutation =>
+        x &&
+        typeof x === 'object' &&
+        typeof x.id === 'string' &&
+        typeof x.path === 'string' &&
+        typeof x.method === 'string' &&
+        typeof x.body === 'string' &&
+        typeof x.createdAt === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeOfflineQueue(queue: OfflineMutation[]) {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT, { detail: { count: queue.length } }));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+export function getOfflineQueueCount() {
+  return readOfflineQueue().length;
+}
+
+export async function queueOfflineMutation(
+  path: string,
+  options: { method: OfflineMutation['method']; body: string },
+) {
+  const queue = readOfflineQueue();
+  queue.push({
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    path,
+    method: options.method,
+    body: options.body,
+    createdAt: new Date().toISOString(),
+  });
+  writeOfflineQueue(queue);
+}
+
+let flushingOfflineQueue = false;
+export async function flushOfflineQueue() {
+  if (flushingOfflineQueue) return;
+  flushingOfflineQueue = true;
+  try {
+    let queue = readOfflineQueue();
+    while (queue.length > 0) {
+      const token = getToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const next = queue[0];
+      const res = await fetch(apiUrl(next.path), {
+        method: next.method,
+        headers,
+        body: next.body,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        // Keep failed items; user can retry later.
+        break;
+      }
+      queue = queue.slice(1);
+      writeOfflineQueue(queue);
+    }
+  } catch {
+    /* still offline */
+  } finally {
+    flushingOfflineQueue = false;
+  }
+}
+
+export function onOfflineQueueChange(callback: (count: number) => void) {
+  const handler = (event: Event) => {
+    const custom = event as CustomEvent<{ count?: number }>;
+    callback(typeof custom.detail?.count === 'number' ? custom.detail.count : getOfflineQueueCount());
+  };
+  window.addEventListener(OFFLINE_QUEUE_EVENT, handler);
+  return () => window.removeEventListener(OFFLINE_QUEUE_EVENT, handler);
+}
+
+export async function apiWithOfflineQueue(
+  path: string,
+  options: RequestInit & { method: OfflineMutation['method']; body: string },
+) {
+  try {
+    await api(path, options);
+    return { queued: false as const };
+  } catch (e) {
+    if (!isOfflineError(e)) throw e;
+    await queueOfflineMutation(path, { method: options.method, body: options.body });
+    return { queued: true as const };
+  }
 }
 
 /* ================= TYPES ================= */
@@ -132,6 +256,7 @@ export type WorkSessionState = {
   accumulatedActiveMs: number;
   isPaused: boolean;
   pauseStartedAt: string | null;
+  sessionRef?: string;
 };
 
 export type FocusSessionState = {
@@ -141,6 +266,7 @@ export type FocusSessionState = {
   endsAt: string | null;
   stuckBreakEndAt: string | null;
   updatedAt: string;
+  sessionRef?: string;
 };
 
 export type Note = {
@@ -151,4 +277,8 @@ export type Note = {
   context: 'focus' | 'work' | 'general';
   createdAt: string;
   updatedAt?: string;
+  linkedSessionRef?: string | null;
+  linkedTaskId?: string | null;
+  linkedTaskTitle?: string | null;
+  linkedProjectName?: string | null;
 };

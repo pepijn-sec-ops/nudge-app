@@ -24,6 +24,22 @@ router.post('/', async (req, res) => {
     content: content.slice(0, 1000),
     pinned: !!req.body?.pinned,
     context: ['focus', 'work', 'general'].includes(req.body?.context) ? req.body.context : 'general',
+    linkedSessionRef:
+      typeof req.body?.linkedSessionRef === 'string' && req.body.linkedSessionRef.trim()
+        ? req.body.linkedSessionRef.trim().slice(0, 120)
+        : null,
+    linkedTaskId:
+      typeof req.body?.linkedTaskId === 'string' && req.body.linkedTaskId.trim()
+        ? req.body.linkedTaskId.trim().slice(0, 120)
+        : null,
+    linkedTaskTitle:
+      typeof req.body?.linkedTaskTitle === 'string' && req.body.linkedTaskTitle.trim()
+        ? req.body.linkedTaskTitle.trim().slice(0, 160)
+        : null,
+    linkedProjectName:
+      typeof req.body?.linkedProjectName === 'string' && req.body.linkedProjectName.trim()
+        ? req.body.linkedProjectName.trim().slice(0, 160)
+        : null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

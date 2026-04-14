@@ -100,7 +100,11 @@ export default function Stats() {
         <div className="rounded-[2rem] border border-white/40 bg-white/60 p-4 text-center shadow-md backdrop-blur-md">
           <p className="text-xs font-bold uppercase opacity-60">Daily streak</p>
           <p className="mt-1 text-4xl font-black text-[color:var(--nudge-primary)]">{data.streakDays}</p>
-          <p className="text-xs opacity-70">Consecutive days with logged time (from today backward).</p>
+          <p className="text-xs opacity-70">
+            {data.streak?.graceUsed
+              ? `Best ${data.streak.best} days · grace day active`
+              : `Best ${data.streak?.best ?? data.streakDays} days`}
+          </p>
         </div>
         <div className="rounded-[2rem] border border-white/40 bg-white/60 p-4 text-center shadow-md backdrop-blur-md">
           <p className="text-xs font-bold uppercase opacity-60">Avg focus session</p>
@@ -175,14 +179,23 @@ export default function Stats() {
             <li key={`${item.kind}-${i}`} className="rounded-2xl bg-white/70 px-3 py-2 font-semibold">
               <span className="text-xs uppercase opacity-60">{item.kind.replace('_', ' ')}</span>
               <div>
-                {item.kind === 'mood' && String((item.payload as { mood?: string }).mood)}
                 {item.kind === 'focus_session' &&
                   `Focus · ${(item.payload as { durationMinutes?: number }).durationMinutes ?? 0} min`}
                 {item.kind === 'work_session' &&
                   `Work · ${(item.payload as { projectName?: string }).projectName}`}
                 {item.kind === 'task_completed' &&
                   `Task done · ${(item.payload as { title?: string }).title}`}
+                {item.kind === 'note' &&
+                  `Note · ${String((item.payload as { content?: string }).content || '').slice(0, 80)}`}
               </div>
+              {(item.kind === 'focus_session' || item.kind === 'work_session') && (
+                <div className="mt-1 text-xs opacity-70">
+                  {(item.payload as { mood?: string | null }).mood
+                    ? `Mood: ${(item.payload as { mood?: string }).mood}`
+                    : 'Mood: none'}{' '}
+                  · Notes linked: {(item.payload as { linkedNotesCount?: number }).linkedNotesCount ?? 0}
+                </div>
+              )}
               <div className="text-xs opacity-60">{new Date(item.at).toLocaleString()}</div>
             </li>
           ))}

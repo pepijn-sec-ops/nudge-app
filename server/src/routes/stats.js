@@ -25,6 +25,7 @@ router.get('/summary', async (req, res) => {
   const user = db.users.find((u) => u.id === uid);
   const sessions = db.sessions.filter((s) => s.userId === uid);
   const moods = db.moods.filter((m) => m.userId === uid);
+  const notes = db.notes.filter((n) => n.userId === uid);
   const focusSessions = sessions.filter((s) => s.type === 'focus');
   const totalFocusMinutes = focusSessions.reduce((a, s) => a + (s.durationMinutes || 0), 0);
   const totalWorkMinutes = sessions
@@ -99,13 +100,8 @@ router.get('/summary', async (req, res) => {
       ? Math.round((totalFocusMinutes / focusSessions.length) * 10) / 10
       : 0;
 
-  let streakDays = 0;
-  for (let i = last30Days.length - 1; i >= 0; i -= 1) {
-    if (last30Days[i].total > 0) streakDays += 1;
-    else break;
-  }
-
-  const timeline = buildTimeline(sessions, moods, db.tasks.filter((t) => t.userId === uid));
+  const streak = computeGentleStreak(sessions);
+  const timeline = buildTimeline(sessions, moods, notes, db.tasks.filter((t) => t.userId === uid));
 
   const nudge = db.globalConfig?.systemNudge || { message: '', updatedAt: null };
 
@@ -129,7 +125,8 @@ router.get('/summary', async (req, res) => {
     hourBuckets,
     focusVsWork,
     avgFocusSession,
-    streakDays,
+    streakDays: streak.current,
+    streak,
     timeline,
     moods: moods.slice(-200),
     systemNudge: {
@@ -139,17 +136,36 @@ router.get('/summary', async (req, res) => {
   });
 });
 
-function buildTimeline(sessions, moods, tasks) {
+function buildTimeline(sessions, moods, notes, tasks) {
   const items = [];
+  const moodBySessionId = new Map();
+  for (const m of moods) {
+    if (!m.sessionId) continue;
+    if (!moodBySessionId.has(m.sessionId)) moodBySessionId.set(m.sessionId, m);
+  }
+  const notesBySessionRef = new Map();
+  for (const n of notes) {
+    const key = typeof n.linkedSessionRef === 'string' ? n.linkedSessionRef : null;
+    if (!key) continue;
+    if (!notesBySessionRef.has(key)) notesBySessionRef.set(key, []);
+    notesBySessionRef.get(key).push(n);
+  }
   for (const s of sessions) {
+    const linkedNotes = typeof s.sessionRef === 'string' ? notesBySessionRef.get(s.sessionRef) || [] : [];
     items.push({
       kind: s.type === 'focus' ? 'focus_session' : 'work_session',
       at: s.completedAt,
-      payload: s,
+      payload: {
+        ...s,
+        mood: moodBySessionId.get(s.id)?.mood || null,
+        linkedNotes: linkedNotes.slice(0, 3).map((n) => ({ id: n.id, content: n.content })),
+        linkedNotesCount: linkedNotes.length,
+      },
     });
   }
-  for (const m of moods) {
-    items.push({ kind: 'mood', at: m.createdAt, payload: m });
+  for (const n of notes) {
+    if (n.linkedSessionRef) continue;
+    items.push({ kind: 'note', at: n.createdAt, payload: n });
   }
   for (const t of tasks) {
     if (t.completed) {
@@ -162,6 +178,69 @@ function buildTimeline(sessions, moods, tasks) {
   }
   items.sort((a, b) => new Date(b.at) - new Date(a.at));
   return items.slice(0, 100);
+}
+
+function dateKeyLocal(iso) {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function dayNumberFromKey(key) {
+  const [y, m, d] = String(key).split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  return Math.floor(new Date(y, m - 1, d).getTime() / 86400000);
+}
+
+function computeGentleStreak(sessions) {
+  const activeKeys = [...new Set(sessions.map((s) => dateKeyLocal(s.completedAt)))].sort();
+  const activeNums = activeKeys.map(dayNumberFromKey).filter((n) => Number.isFinite(n) && n > 0);
+  const activeSet = new Set(activeNums);
+  const todayNum = Math.floor(new Date().setHours(0, 0, 0, 0) / 86400000);
+
+  let current = 0;
+  let cursor = todayNum;
+  let graceUsed = false;
+  while (activeSet.has(cursor) || !graceUsed) {
+    if (activeSet.has(cursor)) {
+      current += 1;
+      cursor -= 1;
+    } else if (!graceUsed) {
+      graceUsed = true;
+      cursor -= 1;
+    } else {
+      break;
+    }
+  }
+
+  let best = 0;
+  for (let i = 0; i < activeNums.length; i += 1) {
+    let len = 1;
+    let grace = 1;
+    let prev = activeNums[i];
+    for (let j = i + 1; j < activeNums.length; j += 1) {
+      const diff = activeNums[j] - prev;
+      if (diff === 1) {
+        len += 1;
+        prev = activeNums[j];
+      } else if (diff === 2 && grace > 0) {
+        grace = 0;
+        len += 1;
+        prev = activeNums[j];
+      } else if (diff > 2) {
+        break;
+      }
+    }
+    if (len > best) best = len;
+  }
+
+  return {
+    current,
+    best,
+    graceUsed,
+  };
 }
 
 router.post('/reset-progress', async (req, res) => {

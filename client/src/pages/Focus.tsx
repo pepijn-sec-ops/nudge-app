@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { api, type FocusSessionState } from '../lib/api';
+import { api, apiWithOfflineQueue, type FocusSessionState } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MoodCheckIn } from '../components/MoodCheckIn';
 import { FocusBuddy } from '../components/FocusBuddy';
@@ -11,7 +11,7 @@ import {
 import type { AmbientKind } from '../services/audioService';
 import { tts } from '../services/ttsService';
 
-type Loc = { minutes?: number };
+type Loc = { minutes?: number; taskId?: string; taskTitle?: string };
 type PersistedFocusState = {
   minutes: number;
   remaining: number;
@@ -40,8 +40,10 @@ export default function Focus() {
 
   const [moodOpen, setMoodOpen] = useState(false);
   const [pendingComplete, setPendingComplete] = useState<{ actual: number; planned: number } | null>(null);
+  const [focusSessionRef, setFocusSessionRef] = useState<string | null>(null);
 
   const prevRem = useRef(remaining);
+  const prevStuckBreakSecRef = useRef(stuckBreakSec);
   const lastTickMsRef = useRef(Date.now());
   const tickRef = useRef<number | null>(null);
   const endedRef = useRef(false);
@@ -52,7 +54,7 @@ export default function Focus() {
   const syncFocusServer = useCallback(
     async (payload: FocusSessionState | { clear: true }) => {
       try {
-        await api('/api/sessions/focus/active', {
+        await apiWithOfflineQueue('/api/sessions/focus/active', {
           method: 'PUT',
           body: JSON.stringify(payload),
         });
@@ -96,6 +98,7 @@ export default function Focus() {
           setMinutes(safeMinutes);
           setRunning(true);
           setPaused(!!s.isPaused);
+          setFocusSessionRef(typeof s.sessionRef === 'string' && s.sessionRef.trim() ? s.sessionRef : null);
           if (!s.isPaused && s.endsAt) {
             const rem = Math.max(0, Math.ceil((new Date(s.endsAt).getTime() - Date.now()) / 1000));
             setRemaining(rem);
@@ -204,7 +207,9 @@ export default function Focus() {
   }, [stuckBreakSec]);
 
   useEffect(() => {
-    if (stuckBreakSec === 0 && running && paused) {
+    const wasBreaking = prevStuckBreakSecRef.current > 0;
+    prevStuckBreakSecRef.current = stuckBreakSec;
+    if (wasBreaking && stuckBreakSec === 0 && running && paused) {
       setPaused(false);
     }
   }, [stuckBreakSec, running, paused]);
@@ -235,6 +240,8 @@ export default function Focus() {
 
   useEffect(() => {
     if (!running) return;
+    const sessionRef = focusSessionRef || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_focus`);
+    if (!focusSessionRef) setFocusSessionRef(sessionRef);
     if (paused) {
       void syncFocusServer({
         plannedMinutes: minutes,
@@ -243,6 +250,7 @@ export default function Focus() {
         endsAt: null,
         stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
         updatedAt: new Date().toISOString(),
+        sessionRef,
       });
       return;
     }
@@ -253,8 +261,9 @@ export default function Focus() {
       endsAt: new Date(Date.now() + remaining * 1000).toISOString(),
       stuckBreakEndAt: stuckBreakSec > 0 ? new Date(Date.now() + stuckBreakSec * 1000).toISOString() : null,
       updatedAt: new Date().toISOString(),
+      sessionRef,
     });
-  }, [running, paused, minutes, syncFocusServer]);
+  }, [running, paused, minutes, focusSessionRef, syncFocusServer]);
 
   const sendHeartbeat = useCallback((focusing: boolean) => {
     void api('/api/presence/heartbeat', {
@@ -313,6 +322,7 @@ export default function Focus() {
     setRemaining(m * 60);
     setRunning(false);
     setPaused(false);
+    setFocusSessionRef(null);
     void syncFocusServer({ clear: true });
   }
 
@@ -325,11 +335,14 @@ export default function Focus() {
     if (!pendingComplete) return;
 
     try {
-      await api('/api/sessions/focus/complete', {
+      await apiWithOfflineQueue('/api/sessions/focus/complete', {
         method: 'POST',
         body: JSON.stringify({
           plannedMinutes: pendingComplete.planned,
           actualMinutes: pendingComplete.actual,
+          taskId: loc.taskId || null,
+          taskName: loc.taskTitle || null,
+          sessionRef: focusSessionRef || null,
         }),
       });
       await refreshUser();
@@ -338,6 +351,7 @@ export default function Focus() {
     setMoodOpen(false);
     setPendingComplete(null);
     setRemaining(minutes * 60);
+    setFocusSessionRef(null);
     void syncFocusServer({ clear: true });
     try {
       localStorage.removeItem(FOCUS_SESSION_KEY);
@@ -350,9 +364,16 @@ export default function Focus() {
     const content = ideaNote.trim();
     if (!content) return;
     try {
-      await api('/api/notes', {
+      await apiWithOfflineQueue('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({ content, context: 'focus', pinned }),
+        body: JSON.stringify({
+          content,
+          context: 'focus',
+          pinned,
+          linkedSessionRef: focusSessionRef || null,
+          linkedTaskId: loc.taskId || null,
+          linkedTaskTitle: loc.taskTitle || null,
+        }),
       });
       setIdeaNote('');
     } catch {
@@ -485,6 +506,8 @@ export default function Focus() {
                     if (prefsRef.current?.focusVoiceCuesEnabled !== false) {
                       tts.announceStart(minutes, lang);
                     }
+                    const sessionRef = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_focus`;
+                    setFocusSessionRef(sessionRef);
                     setRunning(true);
                     setPaused(false);
                     setStuckBreakSec(0);
@@ -524,6 +547,7 @@ export default function Focus() {
                       const actualMin = Math.max(1, Math.round(spent / 60));
                       setPendingComplete({ actual: actualMin, planned: minutes });
                       setMoodOpen(true);
+                      setFocusSessionRef(null);
                       void syncFocusServer({ clear: true });
                     }}
                     className="px-5 py-2 bg-gray-100 rounded-full"
