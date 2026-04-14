@@ -65,22 +65,22 @@ export function AppShell() {
             <NavLink to="/" end className={linkClass}>
               Home
             </NavLink>
-            <NavLink to="focus" className={linkClass}>
+            <NavLink to="/focus" className={linkClass}>
               Focus
             </NavLink>
-            <NavLink to="tasks" className={linkClass}>
+            <NavLink to="/tasks" className={linkClass}>
               Tasks
             </NavLink>
-            <NavLink to="work" className={linkClass}>
+            <NavLink to="/work" className={linkClass}>
               Work
             </NavLink>
-            <NavLink to="notes" className={linkClass}>
+            <NavLink to="/notes" className={linkClass}>
               Notes
             </NavLink>
-            <NavLink to="stats" className={linkClass}>
+            <NavLink to="/stats" className={linkClass}>
               Stats
             </NavLink>
-            <NavLink to="profile" className={linkClass}>
+            <NavLink to="/profile" className={linkClass}>
               Profile
             </NavLink>
             {isUserAdmin(user?.role) && (

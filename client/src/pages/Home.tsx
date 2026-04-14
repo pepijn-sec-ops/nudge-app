@@ -171,7 +171,7 @@ export default function Home() {
             {summary?.xp ?? user?.xp ?? 0} XP
           </span>
           <Link
-            to="focus"
+            to="/focus"
             className="ml-auto rounded-[2rem] bg-[color:var(--nudge-primary)] px-5 py-2 font-bold text-white shadow-md"
           >
             Start focus
@@ -198,7 +198,7 @@ export default function Home() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => nav('focus', { state: { minutes: 25 } })}
+            onClick={() => nav('/focus', { state: { minutes: 25 } })}
             className="rounded-[2rem] bg-[color:var(--nudge-primary)] px-4 py-2 text-sm font-extrabold text-white shadow"
           >
             Start Focus 25
@@ -264,7 +264,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() =>
-                  nav('focus', {
+                  nav('/focus', {
                     state: {
                       taskId: t.id,
                       taskTitle: t.title,

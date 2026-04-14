@@ -156,7 +156,7 @@ export default function Tasks() {
                 className="rounded-[2rem] bg-[color:var(--nudge-accent)] px-4 py-2 text-sm font-extrabold text-[color:var(--nudge-text)] shadow disabled:opacity-40"
                 disabled={t.completed}
                 onClick={() =>
-                  nav('focus', {
+                  nav('/focus', {
                     state: { taskId: t.id, taskTitle: t.title, minutes: Math.max(5, t.estimateMinutes) },
                   })
                 }
